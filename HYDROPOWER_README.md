@@ -67,7 +67,7 @@ Where:
 
 ## Python Implementation
 
-Three Python scripts are provided:
+Four Python scripts are provided:
 
 ### 1. `hydropower_solution.py`
 The main solution with detailed formatted output showing all calculation steps.
@@ -99,21 +99,39 @@ python hydropower_visual.py
 - Cost comparison at different loads
 - Key findings summary
 
-### 3. `hydropower_cost_analysis.py`
-GUI version using Tkinter (requires tkinter)
+### 3. `hydropower_visualization.py` ⭐ **RECOMMENDED**
+Professional matplotlib visualization with comprehensive charts.
+
+**Run:**
+```bash
+python hydropower_visualization.py
+```
+
+**Features:**
+- High-resolution output (300 DPI) saved as PNG
+- 7 comprehensive visualizations in one figure:
+  - Final answer prominently displayed
+  - Fixed vs Variable cost pie chart
+  - Detailed component breakdown (horizontal bars)
+  - Stacked cost view
+  - Load factor sensitivity analysis
+  - Percentage distribution chart
+  - Cost comparison table for different loads
+- Professional styling and color coding
+- Exports as `hydropower_analysis_full.png`
+
+**Requirements:**
+```bash
+pip install matplotlib
+```
+
+### 4. `hydropower_cost_analysis.py`
+GUI version using Tkinter (requires tkinter - may not be available in all environments)
 
 **Features:**
 - Interactive GUI with multiple tabs
 - Multiple visualization charts
 - Detailed calculations panel
-
-### 4. `hydropower_analysis_matplotlib.py`
-Matplotlib version with professional charts (requires matplotlib)
-
-**Features:**
-- High-quality visualizations
-- Multiple subplots
-- Exports PNG image
 
 ## Key Insights
 
@@ -147,12 +165,31 @@ print(f"Total annual cost: Rs. {analyzer.total_fixed_charges + analyzer.total_va
 analyzer.print_detailed_report()
 ```
 
+## Visualization Output
+
+The `hydropower_visualization.py` script generates a comprehensive visualization (`hydropower_analysis_full.png`) that includes:
+
+### Visual Components:
+
+1. **Final Answer Box** - Green highlighted box with the generation cost formula
+2. **Fixed vs Variable Distribution** - Pie chart showing 65.0% fixed and 35.0% variable
+3. **Detailed Cost Components** - Horizontal bar chart with all 5 cost categories
+4. **Stacked Cost View** - Combined visualization of total annual costs
+5. **Load Factor Impact** - Line graph showing sensitivity from 50% to 100% load factor
+6. **Percentage Distribution** - Bar chart showing each component's share of total cost
+7. **Cost Comparison Table** - Practical examples at 10k, 20k, 30k, and 40k kW demand levels
+
+The visualization is saved as a high-resolution PNG (300 DPI) suitable for reports and presentations.
+
 ## Requirements
 
 - Python 3.6+
-- No external dependencies for basic scripts
-- Optional: tkinter for GUI version
-- Optional: matplotlib for graphical charts
+- No external dependencies for basic scripts (hydropower_solution.py, hydropower_visual.py)
+- **Recommended**: `matplotlib` for professional visualizations
+  ```bash
+  pip install matplotlib
+  ```
+- Optional: `tkinter` for GUI version (may require system installation)
 
 ## Author
 
