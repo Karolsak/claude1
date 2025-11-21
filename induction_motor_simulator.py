@@ -20,14 +20,54 @@ import time
 import queue
 import warnings
 import atexit
+import sys
+import io
 
 # Suppress matplotlib/tkinter threading warnings during cleanup
 warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
 warnings.filterwarnings('ignore', message='.*main thread is not in main loop.*')
 
+# Suppress Tkinter garbage collection errors during shutdown
+import os
+if os.environ.get('SUPPRESS_TK_CLEANUP_ERRORS', '1') == '1':
+    # Store original stderr
+    _original_stderr = sys.stderr
+    _cleanup_in_progress = False
+
+    class CleanupErrorFilter:
+        """Filter to suppress Tkinter cleanup errors during shutdown"""
+        def __init__(self, stream):
+            self.stream = stream
+            self.buffer = []
+
+        def write(self, text):
+            global _cleanup_in_progress
+            # Suppress known Tkinter cleanup errors
+            if _cleanup_in_progress or any(phrase in text for phrase in [
+                'Exception ignored',
+                'Image.__del__',
+                'Variable.__del__',
+                'main thread is not in main loop',
+                'RuntimeError: main thread'
+            ]):
+                return  # Suppress this error
+            self.stream.write(text)
+
+        def flush(self):
+            self.stream.flush()
+
+        def isatty(self):
+            return self.stream.isatty()
+
+    # Only filter stderr if not already filtered
+    if not isinstance(sys.stderr, CleanupErrorFilter):
+        sys.stderr = CleanupErrorFilter(_original_stderr)
+
 # Register cleanup function to close all matplotlib figures on exit
 def cleanup_matplotlib():
     """Close all matplotlib figures on program exit"""
+    global _cleanup_in_progress
+    _cleanup_in_progress = True
     try:
         plt.close('all')
     except:
@@ -289,9 +329,13 @@ class InductionMotorGUI:
 
     def on_closing(self):
         """Handle window closing - cleanup matplotlib figures to prevent Image.__del__ errors"""
+        global _cleanup_in_progress
         try:
             # Stop any running simulations
             self.is_simulating = False
+
+            # Set cleanup flag to suppress error messages
+            _cleanup_in_progress = True
 
             # Close all matplotlib figures explicitly before Tkinter shuts down
             plt.close('all')
@@ -1264,6 +1308,7 @@ class InductionMotorGUI:
 
 def main():
     """Main entry point"""
+    global _cleanup_in_progress
     root = tk.Tk()
     try:
         app = InductionMotorGUI(root)
@@ -1274,6 +1319,7 @@ def main():
         print(f"Error: {e}")
     finally:
         # Final cleanup - close all matplotlib figures
+        _cleanup_in_progress = True
         try:
             plt.close('all')
         except:
