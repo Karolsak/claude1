@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Tuple, List
 import threading
 import time
+import queue
 
 
 @dataclass
@@ -241,6 +242,9 @@ class InductionMotorGUI:
         self.is_simulating = False
         self.sim_thread = None
 
+        # Thread-safe queue for communication between worker thread and GUI
+        self.gui_queue = queue.Queue()
+
         # Create main notebook (tabs)
         self.notebook = ttk.Notebook(root)
         self.notebook.pack(fill='both', expand=True, padx=5, pady=5)
@@ -253,11 +257,42 @@ class InductionMotorGUI:
         # Bind resize event for auto-scaling
         self.root.bind('<Configure>', self.on_window_resize)
 
+        # Start queue checking (from main thread)
+        self._check_gui_queue()
+
     def on_window_resize(self, event):
         """Handle window resize for auto-scaling"""
         if event.widget == self.root:
             # Update canvas sizes if needed
             pass
+
+    def _check_gui_queue(self):
+        """Check queue for messages from worker threads (runs on main thread)"""
+        try:
+            while True:
+                # Non-blocking check
+                msg = self.gui_queue.get_nowait()
+                msg_type = msg.get('type')
+
+                if msg_type == 'stop_simulation':
+                    # Update button states
+                    self.start_btn.config(state='normal')
+                    self.stop_btn.config(state='disabled')
+
+                elif msg_type == 'plot_results':
+                    # Plot the simulation results
+                    data = msg.get('data')
+                    self.plot_dynamic_results(**data)
+
+                elif msg_type == 'error':
+                    # Show error dialog
+                    messagebox.showerror(msg.get('title', 'Error'), msg.get('message', 'An error occurred'))
+
+        except queue.Empty:
+            pass
+
+        # Schedule next check (every 100ms)
+        self.root.after(100, self._check_gui_queue)
 
     # ========================= STATIC ANALYSIS TAB =========================
     def create_static_analysis_tab(self):
@@ -491,13 +526,8 @@ class InductionMotorGUI:
     def stop_simulation(self):
         """Stop simulation (thread-safe)"""
         self.is_simulating = False
-        # Schedule GUI updates on main thread
-        self.root.after(0, self._update_buttons_stopped)
-
-    def _update_buttons_stopped(self):
-        """Update button states when simulation stops (main thread only)"""
-        self.start_btn.config(state='normal')
-        self.stop_btn.config(state='disabled')
+        # Send message to GUI thread via queue
+        self.gui_queue.put({'type': 'stop_simulation'})
 
     def reset_simulation(self):
         """Reset simulation"""
@@ -533,8 +563,12 @@ class InductionMotorGUI:
             sol = self.dynamic_model.simulate(t_span, y0, method=method, dt=0.0001)
 
             if not sol['success']:
-                # Schedule error dialog on main thread
-                self.root.after(0, lambda: messagebox.showerror("Simulation Error", "Simulation failed to converge"))
+                # Send error message via queue
+                self.gui_queue.put({
+                    'type': 'error',
+                    'title': 'Simulation Error',
+                    'message': 'Simulation failed to converge'
+                })
                 self.stop_simulation()
                 return
 
@@ -568,12 +602,29 @@ class InductionMotorGUI:
             # Efficiency
             efficiency = np.where(p_in > 0, (p_mech / p_in) * 100, 0)
 
-            # Plot results (schedule on main thread)
-            self.root.after(0, lambda: self.plot_dynamic_results(t, n_rpm, n_sync, t_em, i_s, p_in, p_mech, flux_s, efficiency))
+            # Send plot data via queue
+            self.gui_queue.put({
+                'type': 'plot_results',
+                'data': {
+                    't': t,
+                    'n_rpm': n_rpm,
+                    'n_sync': n_sync,
+                    't_em': t_em,
+                    'i_s': i_s,
+                    'p_in': p_in,
+                    'p_mech': p_mech,
+                    'flux_s': flux_s,
+                    'efficiency': efficiency
+                }
+            })
 
         except Exception as e:
-            # Schedule error dialog on main thread
-            self.root.after(0, lambda: messagebox.showerror("Simulation Error", f"Error during simulation: {str(e)}"))
+            # Send error message via queue
+            self.gui_queue.put({
+                'type': 'error',
+                'title': 'Simulation Error',
+                'message': f'Error during simulation: {str(e)}'
+            })
         finally:
             self.stop_simulation()
 
