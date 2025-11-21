@@ -6,6 +6,8 @@ Includes: Static Analysis, Dynamic Simulation, and Real-time Visualization
 import tkinter as tk
 from tkinter import ttk, messagebox
 import numpy as np
+import matplotlib
+matplotlib.use('TkAgg')  # Set backend explicitly before importing pyplot
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
@@ -16,6 +18,22 @@ from typing import Tuple, List
 import threading
 import time
 import queue
+import warnings
+import atexit
+
+# Suppress matplotlib/tkinter threading warnings during cleanup
+warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
+warnings.filterwarnings('ignore', message='.*main thread is not in main loop.*')
+
+# Register cleanup function to close all matplotlib figures on exit
+def cleanup_matplotlib():
+    """Close all matplotlib figures on program exit"""
+    try:
+        plt.close('all')
+    except:
+        pass
+
+atexit.register(cleanup_matplotlib)
 
 
 @dataclass
@@ -257,6 +275,9 @@ class InductionMotorGUI:
         # Bind resize event for auto-scaling
         self.root.bind('<Configure>', self.on_window_resize)
 
+        # Bind window close event for cleanup
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
         # Start queue checking (from main thread)
         self._check_gui_queue()
 
@@ -265,6 +286,27 @@ class InductionMotorGUI:
         if event.widget == self.root:
             # Update canvas sizes if needed
             pass
+
+    def on_closing(self):
+        """Handle window closing - cleanup matplotlib figures to prevent Image.__del__ errors"""
+        try:
+            # Stop any running simulations
+            self.is_simulating = False
+
+            # Close all matplotlib figures explicitly before Tkinter shuts down
+            plt.close('all')
+
+            # Clear figure references
+            if hasattr(self, 'fig_dynamic'):
+                self.fig_dynamic.clear()
+            if hasattr(self, 'fig_multiphysics'):
+                self.fig_multiphysics.clear()
+
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+        finally:
+            # Destroy the window
+            self.root.destroy()
 
     def _check_gui_queue(self):
         """Check queue for messages from worker threads (runs on main thread)"""
@@ -1223,8 +1265,19 @@ class InductionMotorGUI:
 def main():
     """Main entry point"""
     root = tk.Tk()
-    app = InductionMotorGUI(root)
-    root.mainloop()
+    try:
+        app = InductionMotorGUI(root)
+        root.mainloop()
+    except KeyboardInterrupt:
+        print("\nApplication interrupted by user")
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        # Final cleanup - close all matplotlib figures
+        try:
+            plt.close('all')
+        except:
+            pass
 
 
 if __name__ == "__main__":
