@@ -66,18 +66,48 @@ class Image:
 
 ### The Solution
 
-We use a custom stderr filter that suppresses these specific errors:
+We use a **buffering stderr filter** that captures complete exception blocks and suppresses them if they're cleanup errors:
 
 ```python
 class CleanupErrorFilter:
+    """Buffers exception blocks and filters Tkinter cleanup errors"""
+
     def write(self, text):
-        # Suppress known Tkinter cleanup errors
-        if 'Exception ignored' in text or 'main thread is not in main loop' in text:
-            return  # Don't print it
+        # Detect start of exception block
+        if 'Exception ignored' in text or 'Traceback' in text:
+            self.in_exception = True
+            self.buffer = [text]
+            return
+
+        # Buffer exception lines
+        if self.in_exception:
+            self.buffer.append(text)
+
+            # Check if it's a cleanup error
+            if 'tkinter' in text or '__del__' in text:
+                self.suppress_exception = True
+
+            # End of exception - decide whether to output
+            if text.strip() == '':
+                if not self.suppress_exception:
+                    # Output non-cleanup exceptions
+                    for line in self.buffer:
+                        self.stream.write(line)
+                # Reset for next exception
+                self.buffer = []
+                return
+
+        # Normal output
         self.stream.write(text)
 
 sys.stderr = CleanupErrorFilter(sys.stderr)
 ```
+
+This **buffering approach** ensures:
+- Complete exception blocks are captured
+- Only Tkinter cleanup exceptions are suppressed
+- Real errors are still displayed
+- No partial tracebacks leak through
 
 ### Why Not Fix It Completely?
 

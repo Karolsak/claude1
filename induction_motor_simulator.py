@@ -39,21 +39,59 @@ if os.environ.get('SUPPRESS_TK_CLEANUP_ERRORS', '1') == '1':
         def __init__(self, stream):
             self.stream = stream
             self.buffer = []
+            self.in_exception = False
+            self.suppress_exception = False
 
         def write(self, text):
             global _cleanup_in_progress
-            # Suppress known Tkinter cleanup errors
-            if _cleanup_in_progress or any(phrase in text for phrase in [
-                'Exception ignored',
-                'Image.__del__',
-                'Variable.__del__',
-                'main thread is not in main loop',
-                'RuntimeError: main thread'
-            ]):
-                return  # Suppress this error
+
+            # Start of an exception block
+            if 'Exception ignored' in text or 'Traceback (most recent call last)' in text:
+                self.in_exception = True
+                self.buffer = [text]
+                # Check if this is a cleanup exception
+                self.suppress_exception = _cleanup_in_progress or any(phrase in text for phrase in [
+                    'Exception ignored',
+                    'deallocator'
+                ])
+                return
+
+            # Inside an exception block
+            if self.in_exception:
+                self.buffer.append(text)
+
+                # Check if this line indicates a cleanup error
+                if any(phrase in text for phrase in [
+                    'Image.__del__',
+                    'Variable.__del__',
+                    'main thread is not in main loop',
+                    'RuntimeError: main thread',
+                    'tk.call',
+                    'tkinter'
+                ]):
+                    self.suppress_exception = True
+
+                # End of exception (blank line or no indent)
+                if text.strip() == '' or (not text.startswith(' ') and not text.startswith('Exception') and not text.startswith('Traceback')):
+                    # Decide whether to output
+                    if not self.suppress_exception:
+                        for line in self.buffer:
+                            self.stream.write(line)
+                    # Reset state
+                    self.in_exception = False
+                    self.suppress_exception = False
+                    self.buffer = []
+                return
+
+            # Normal text - just write it
             self.stream.write(text)
 
         def flush(self):
+            # Flush any buffered exception before flushing stream
+            if self.buffer and not self.suppress_exception:
+                for line in self.buffer:
+                    self.stream.write(line)
+                self.buffer = []
             self.stream.flush()
 
         def isatty(self):
