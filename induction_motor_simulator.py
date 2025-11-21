@@ -489,8 +489,13 @@ class InductionMotorGUI:
         self.sim_thread.start()
 
     def stop_simulation(self):
-        """Stop simulation"""
+        """Stop simulation (thread-safe)"""
         self.is_simulating = False
+        # Schedule GUI updates on main thread
+        self.root.after(0, self._update_buttons_stopped)
+
+    def _update_buttons_stopped(self):
+        """Update button states when simulation stops (main thread only)"""
         self.start_btn.config(state='normal')
         self.stop_btn.config(state='disabled')
 
@@ -528,7 +533,8 @@ class InductionMotorGUI:
             sol = self.dynamic_model.simulate(t_span, y0, method=method, dt=0.0001)
 
             if not sol['success']:
-                messagebox.showerror("Simulation Error", "Simulation failed to converge")
+                # Schedule error dialog on main thread
+                self.root.after(0, lambda: messagebox.showerror("Simulation Error", "Simulation failed to converge"))
                 self.stop_simulation()
                 return
 
@@ -562,11 +568,12 @@ class InductionMotorGUI:
             # Efficiency
             efficiency = np.where(p_in > 0, (p_mech / p_in) * 100, 0)
 
-            # Plot results
-            self.plot_dynamic_results(t, n_rpm, n_sync, t_em, i_s, p_in, p_mech, flux_s, efficiency)
+            # Plot results (schedule on main thread)
+            self.root.after(0, lambda: self.plot_dynamic_results(t, n_rpm, n_sync, t_em, i_s, p_in, p_mech, flux_s, efficiency))
 
         except Exception as e:
-            messagebox.showerror("Simulation Error", f"Error during simulation: {str(e)}")
+            # Schedule error dialog on main thread
+            self.root.after(0, lambda: messagebox.showerror("Simulation Error", f"Error during simulation: {str(e)}"))
         finally:
             self.stop_simulation()
 
