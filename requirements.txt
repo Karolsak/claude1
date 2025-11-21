@@ -1,0 +1,15 @@
+# Python requirements for Induction Motor Simulator
+
+# Core numerical libraries
+numpy>=1.21.0
+scipy>=1.7.0
+
+# Plotting and visualization
+matplotlib>=3.4.0
+
+# GUI framework (usually comes with Python)
+# If tkinter is not available, install python3-tk on Linux:
+# sudo apt-get install python3-tk
+
+# Optional: for better plotting performance
+# pillow>=8.0.0
