@@ -1,1363 +1,1076 @@
 """
-Comprehensive Electrical Engineering Lab
-Includes: Example calculations, Dynamic simulations, ODE solvers, Interactive GUI
+Electrical Engineering Advanced Laboratory
+Complete Python + Tkinter Application
+
+Features:
+- Tariff Calculation and Savings Analysis (with your specific problem)
+- DC Motor Dynamic Simulation (RK45, Euler solvers)
+- Synchronous Machine Simulator
+- Real-time visualization with automatic scaling
+- Professional UI with advanced controls
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
-import matplotlib
-matplotlib.use('TkAgg')
+from tkinter import ttk, messagebox
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-import numpy as np
-from scipy.integrate import ode, solve_ivp
-import math
+from scipy.integrate import solve_ivp
 import threading
-import time
 
 
-class ElectricalEngineeringLab:
-    """Main application class for Electrical Engineering Lab"""
+class TariffCalculator(ttk.Frame):
+    """Tariff Calculation and Analysis Module"""
 
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Advanced Electrical Engineering Lab")
-        self.root.geometry("1400x900")
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.create_widgets()
 
-        # Simulation control variables
-        self.simulation_running = False
-        self.simulation_thread = None
-        self.time_data = []
-        self.current_data = []
-        self.voltage_data = []
-        self.speed_data = []
-        self.torque_data = []
-
-        # Create main menu
-        self.create_main_menu()
-
-        # Bind resize event
-        self.root.bind('<Configure>', self.on_window_resize)
-
-    def create_main_menu(self):
-        """Create the main menu interface"""
-        # Clear any existing widgets
-        for widget in self.root.winfo_children():
-            widget.destroy()
-
-        # Main frame
-        main_frame = tk.Frame(self.root, bg='#2c3e50')
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
+    def create_widgets(self):
         # Title
-        title_label = tk.Label(
-            main_frame,
-            text="Electrical Engineering Laboratory",
-            font=('Arial', 28, 'bold'),
-            bg='#2c3e50',
-            fg='white'
+        title = ttk.Label(self, text="Tariff Calculation & Savings Analysis",
+                         font=('Arial', 16, 'bold'))
+        title.grid(row=0, column=0, columnspan=3, pady=10)
+
+        # Input Frame
+        input_frame = ttk.LabelFrame(self, text="Input Parameters", padding=10)
+        input_frame.grid(row=1, column=0, padx=10, pady=10, sticky='nsew')
+
+        # Tariff parameters
+        ttk.Label(input_frame, text="Fixed Charge (Rs/kVA/year):").grid(row=0, column=0, sticky='w', pady=5)
+        self.fixed_charge = tk.DoubleVar(value=50.0)
+        ttk.Entry(input_frame, textvariable=self.fixed_charge, width=15).grid(row=0, column=1, pady=5)
+
+        ttk.Label(input_frame, text="Energy Charge (Paise/kWh):").grid(row=1, column=0, sticky='w', pady=5)
+        self.energy_charge = tk.DoubleVar(value=10.0)
+        ttk.Entry(input_frame, textvariable=self.energy_charge, width=15).grid(row=1, column=1, pady=5)
+
+        ttk.Label(input_frame, text="Max Demand (kW):").grid(row=2, column=0, sticky='w', pady=5)
+        self.max_demand = tk.DoubleVar(value=10.0)
+        ttk.Entry(input_frame, textvariable=self.max_demand, width=15).grid(row=2, column=1, pady=5)
+
+        ttk.Label(input_frame, text="Load Factor (%):").grid(row=3, column=0, sticky='w', pady=5)
+        self.load_factor = tk.DoubleVar(value=60.0)
+        ttk.Scale(input_frame, from_=10, to=100, variable=self.load_factor,
+                 orient='horizontal', length=200).grid(row=3, column=1, pady=5)
+        self.lf_label = ttk.Label(input_frame, text="60.0%")
+        self.lf_label.grid(row=3, column=2, pady=5)
+        self.load_factor.trace_add('write', lambda *args: self.lf_label.config(text=f"{self.load_factor.get():.1f}%"))
+
+        ttk.Label(input_frame, text="Power Factor:").grid(row=4, column=0, sticky='w', pady=5)
+        self.power_factor = tk.DoubleVar(value=0.8)
+        ttk.Scale(input_frame, from_=0.5, to=1.0, variable=self.power_factor,
+                 orient='horizontal', length=200).grid(row=4, column=1, pady=5)
+        self.pf_label = ttk.Label(input_frame, text="0.80")
+        self.pf_label.grid(row=4, column=2, pady=5)
+        self.power_factor.trace_add('write', lambda *args: self.pf_label.config(text=f"{self.power_factor.get():.2f}"))
+
+        # Improved parameters
+        improved_frame = ttk.LabelFrame(self, text="Improved Conditions", padding=10)
+        improved_frame.grid(row=1, column=1, padx=10, pady=10, sticky='nsew')
+
+        ttk.Label(improved_frame, text="Improved Power Factor:").grid(row=0, column=0, sticky='w', pady=5)
+        self.improved_pf = tk.DoubleVar(value=0.9)
+        ttk.Scale(improved_frame, from_=0.5, to=1.0, variable=self.improved_pf,
+                 orient='horizontal', length=200).grid(row=0, column=1, pady=5)
+        self.ipf_label = ttk.Label(improved_frame, text="0.90")
+        self.ipf_label.grid(row=0, column=2, pady=5)
+        self.improved_pf.trace_add('write', lambda *args: self.ipf_label.config(text=f"{self.improved_pf.get():.2f}"))
+
+        ttk.Label(improved_frame, text="Improved Load Factor (%):").grid(row=1, column=0, sticky='w', pady=5)
+        self.improved_lf = tk.DoubleVar(value=80.0)
+        ttk.Scale(improved_frame, from_=10, to=100, variable=self.improved_lf,
+                 orient='horizontal', length=200).grid(row=1, column=1, pady=5)
+        self.ilf_label = ttk.Label(improved_frame, text="80.0%")
+        self.ilf_label.grid(row=1, column=2, pady=5)
+        self.improved_lf.trace_add('write', lambda *args: self.ilf_label.config(text=f"{self.improved_lf.get():.1f}%"))
+
+        # Calculate buttons
+        button_frame = ttk.Frame(improved_frame)
+        button_frame.grid(row=2, column=0, columnspan=3, pady=10)
+
+        ttk.Button(button_frame, text="Calculate Original Cost",
+                  command=self.calculate_original).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Calculate PF Improvement Savings",
+                  command=self.calculate_pf_improvement).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Calculate LF Improvement Effect",
+                  command=self.calculate_lf_improvement).pack(side='left', padx=5)
+        ttk.Button(button_frame, text="Compare All",
+                  command=self.compare_all).pack(side='left', padx=5)
+
+        # Results Frame
+        results_frame = ttk.LabelFrame(self, text="Results & Analysis", padding=10)
+        results_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=10, sticky='nsew')
+
+        self.results_text = tk.Text(results_frame, height=15, width=80, font=('Courier', 10))
+        self.results_text.grid(row=0, column=0, sticky='nsew')
+
+        scrollbar = ttk.Scrollbar(results_frame, command=self.results_text.yview)
+        scrollbar.grid(row=0, column=1, sticky='ns')
+        self.results_text.config(yscrollcommand=scrollbar.set)
+
+        # Visualization Frame
+        viz_frame = ttk.LabelFrame(self, text="Cost Comparison Visualization", padding=10)
+        viz_frame.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky='nsew')
+
+        self.fig = Figure(figsize=(10, 4), dpi=80)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=viz_frame)
+        self.canvas.get_tk_widget().pack(fill='both', expand=True)
+
+        # Configure grid weights for resizing
+        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(3, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+
+    def calculate_tariff(self, max_demand_kw, load_factor, power_factor, fixed_charge, energy_charge):
+        """Calculate annual tariff cost"""
+        # Convert kW to kVA
+        max_demand_kva = max_demand_kw / power_factor
+
+        # Fixed cost (demand charge)
+        fixed_cost = max_demand_kva * fixed_charge
+
+        # Energy consumed per year
+        # Load factor = Average demand / Max demand
+        # Energy = Average demand * hours in year
+        hours_per_year = 8760
+        avg_demand_kw = (load_factor / 100.0) * max_demand_kw
+        energy_kwh = avg_demand_kw * hours_per_year
+
+        # Variable cost (energy charge) - convert paise to rupees
+        variable_cost = energy_kwh * (energy_charge / 100.0)
+
+        total_cost = fixed_cost + variable_cost
+        cost_per_kwh = total_cost / energy_kwh if energy_kwh > 0 else 0
+
+        return {
+            'max_demand_kva': max_demand_kva,
+            'fixed_cost': fixed_cost,
+            'energy_kwh': energy_kwh,
+            'variable_cost': variable_cost,
+            'total_cost': total_cost,
+            'cost_per_kwh': cost_per_kwh
+        }
+
+    def calculate_original(self):
+        """Calculate original cost"""
+        result = self.calculate_tariff(
+            self.max_demand.get(),
+            self.load_factor.get(),
+            self.power_factor.get(),
+            self.fixed_charge.get(),
+            self.energy_charge.get()
         )
-        title_label.pack(pady=40)
 
-        # Menu buttons frame
-        buttons_frame = tk.Frame(main_frame, bg='#2c3e50')
-        buttons_frame.pack(expand=True)
+        self.results_text.delete('1.0', tk.END)
+        self.results_text.insert('1.0', "=" * 70 + "\n")
+        self.results_text.insert(tk.END, "ORIGINAL TARIFF CALCULATION\n")
+        self.results_text.insert(tk.END, "=" * 70 + "\n\n")
+        self.results_text.insert(tk.END, f"Max Demand: {self.max_demand.get():.2f} kW\n")
+        self.results_text.insert(tk.END, f"Power Factor: {self.power_factor.get():.2f} lag\n")
+        self.results_text.insert(tk.END, f"Load Factor: {self.load_factor.get():.2f}%\n\n")
+        self.results_text.insert(tk.END, f"Max Demand in kVA: {result['max_demand_kva']:.2f} kVA\n")
+        self.results_text.insert(tk.END, f"Annual Energy Consumption: {result['energy_kwh']:.2f} kWh\n\n")
+        self.results_text.insert(tk.END, f"Fixed Cost (Demand Charge): Rs. {result['fixed_cost']:.2f}\n")
+        self.results_text.insert(tk.END, f"Variable Cost (Energy Charge): Rs. {result['variable_cost']:.2f}\n")
+        self.results_text.insert(tk.END, f"TOTAL ANNUAL COST: Rs. {result['total_cost']:.2f}\n")
+        self.results_text.insert(tk.END, f"Cost per kWh: Rs. {result['cost_per_kwh']:.4f}\n")
 
-        # Menu options
-        menu_options = [
-            ("Example 50.3: Depreciation Analysis", self.show_depreciation_example),
-            ("Example 50.4: Load & Energy Analysis", self.show_load_example),
-            ("DC Motor Dynamic Simulation", self.show_dc_motor_simulation),
-            ("Induction Motor Simulation", self.show_induction_motor_simulation),
-            ("RLC Circuit Analysis", self.show_rlc_circuit),
-            ("Power System Transient Analysis", self.show_power_system)
+    def calculate_pf_improvement(self):
+        """Calculate savings from power factor improvement"""
+        original = self.calculate_tariff(
+            self.max_demand.get(),
+            self.load_factor.get(),
+            self.power_factor.get(),
+            self.fixed_charge.get(),
+            self.energy_charge.get()
+        )
+
+        improved = self.calculate_tariff(
+            self.max_demand.get(),
+            self.load_factor.get(),
+            self.improved_pf.get(),
+            self.fixed_charge.get(),
+            self.energy_charge.get()
+        )
+
+        savings = original['total_cost'] - improved['total_cost']
+        savings_percent = (savings / original['total_cost']) * 100
+
+        self.results_text.delete('1.0', tk.END)
+        self.results_text.insert('1.0', "=" * 70 + "\n")
+        self.results_text.insert(tk.END, "POWER FACTOR IMPROVEMENT ANALYSIS\n")
+        self.results_text.insert(tk.END, "=" * 70 + "\n\n")
+
+        self.results_text.insert(tk.END, "ORIGINAL CONDITION:\n")
+        self.results_text.insert(tk.END, f"  Power Factor: {self.power_factor.get():.2f} lag\n")
+        self.results_text.insert(tk.END, f"  Max Demand: {original['max_demand_kva']:.2f} kVA\n")
+        self.results_text.insert(tk.END, f"  Total Annual Cost: Rs. {original['total_cost']:.2f}\n\n")
+
+        self.results_text.insert(tk.END, "IMPROVED CONDITION (PF improvement):\n")
+        self.results_text.insert(tk.END, f"  Power Factor: {self.improved_pf.get():.2f} lag\n")
+        self.results_text.insert(tk.END, f"  Max Demand: {improved['max_demand_kva']:.2f} kVA\n")
+        self.results_text.insert(tk.END, f"  Total Annual Cost: Rs. {improved['total_cost']:.2f}\n\n")
+
+        self.results_text.insert(tk.END, f"ANNUAL SAVINGS: Rs. {savings:.2f}\n")
+        self.results_text.insert(tk.END, f"Savings Percentage: {savings_percent:.2f}%\n\n")
+
+        self.results_text.insert(tk.END, "BREAKDOWN:\n")
+        self.results_text.insert(tk.END, f"  Reduction in kVA demand: {original['max_demand_kva'] - improved['max_demand_kva']:.2f} kVA\n")
+        self.results_text.insert(tk.END, f"  Fixed cost reduction: Rs. {original['fixed_cost'] - improved['fixed_cost']:.2f}\n")
+        self.results_text.insert(tk.END, f"  Energy consumption: {improved['energy_kwh']:.2f} kWh (unchanged)\n")
+
+    def calculate_lf_improvement(self):
+        """Calculate effect of load factor improvement"""
+        original = self.calculate_tariff(
+            self.max_demand.get(),
+            self.load_factor.get(),
+            self.power_factor.get(),
+            self.fixed_charge.get(),
+            self.energy_charge.get()
+        )
+
+        improved = self.calculate_tariff(
+            self.max_demand.get(),
+            self.improved_lf.get(),
+            self.power_factor.get(),
+            self.fixed_charge.get(),
+            self.energy_charge.get()
+        )
+
+        self.results_text.delete('1.0', tk.END)
+        self.results_text.insert('1.0', "=" * 70 + "\n")
+        self.results_text.insert(tk.END, "LOAD FACTOR IMPROVEMENT ANALYSIS\n")
+        self.results_text.insert(tk.END, "=" * 70 + "\n\n")
+
+        self.results_text.insert(tk.END, "ORIGINAL CONDITION:\n")
+        self.results_text.insert(tk.END, f"  Load Factor: {self.load_factor.get():.2f}%\n")
+        self.results_text.insert(tk.END, f"  Energy Consumption: {original['energy_kwh']:.2f} kWh\n")
+        self.results_text.insert(tk.END, f"  Total Annual Cost: Rs. {original['total_cost']:.2f}\n")
+        self.results_text.insert(tk.END, f"  Cost per kWh: Rs. {original['cost_per_kwh']:.4f}\n\n")
+
+        self.results_text.insert(tk.END, "IMPROVED CONDITION (LF improvement):\n")
+        self.results_text.insert(tk.END, f"  Load Factor: {self.improved_lf.get():.2f}%\n")
+        self.results_text.insert(tk.END, f"  Energy Consumption: {improved['energy_kwh']:.2f} kWh\n")
+        self.results_text.insert(tk.END, f"  Total Annual Cost: Rs. {improved['total_cost']:.2f}\n")
+        self.results_text.insert(tk.END, f"  Cost per kWh: Rs. {improved['cost_per_kwh']:.4f}\n\n")
+
+        cost_reduction = original['cost_per_kwh'] - improved['cost_per_kwh']
+        reduction_percent = (cost_reduction / original['cost_per_kwh']) * 100
+
+        self.results_text.insert(tk.END, "EFFECT ON COST PER kWh:\n")
+        self.results_text.insert(tk.END, f"  Reduction in cost per kWh: Rs. {cost_reduction:.4f}\n")
+        self.results_text.insert(tk.END, f"  Percentage reduction: {reduction_percent:.2f}%\n\n")
+
+        self.results_text.insert(tk.END, "EXPLANATION:\n")
+        self.results_text.insert(tk.END, "  Improving load factor increases energy consumption (more utilization)\n")
+        self.results_text.insert(tk.END, "  while keeping demand charge constant, thus reducing cost per kWh.\n")
+        self.results_text.insert(tk.END, f"  Additional energy consumed: {improved['energy_kwh'] - original['energy_kwh']:.2f} kWh\n")
+        self.results_text.insert(tk.END, f"  Additional cost: Rs. {improved['total_cost'] - original['total_cost']:.2f}\n")
+
+    def compare_all(self):
+        """Compare all scenarios"""
+        original = self.calculate_tariff(
+            self.max_demand.get(),
+            self.load_factor.get(),
+            self.power_factor.get(),
+            self.fixed_charge.get(),
+            self.energy_charge.get()
+        )
+
+        pf_improved = self.calculate_tariff(
+            self.max_demand.get(),
+            self.load_factor.get(),
+            self.improved_pf.get(),
+            self.fixed_charge.get(),
+            self.energy_charge.get()
+        )
+
+        lf_improved = self.calculate_tariff(
+            self.max_demand.get(),
+            self.improved_lf.get(),
+            self.power_factor.get(),
+            self.fixed_charge.get(),
+            self.energy_charge.get()
+        )
+
+        both_improved = self.calculate_tariff(
+            self.max_demand.get(),
+            self.improved_lf.get(),
+            self.improved_pf.get(),
+            self.fixed_charge.get(),
+            self.energy_charge.get()
+        )
+
+        # Display results
+        self.results_text.delete('1.0', tk.END)
+        self.results_text.insert('1.0', "=" * 70 + "\n")
+        self.results_text.insert(tk.END, "COMPREHENSIVE TARIFF COMPARISON\n")
+        self.results_text.insert(tk.END, "=" * 70 + "\n\n")
+
+        scenarios = [
+            ("Original", original, self.power_factor.get(), self.load_factor.get()),
+            ("PF Improved", pf_improved, self.improved_pf.get(), self.load_factor.get()),
+            ("LF Improved", lf_improved, self.power_factor.get(), self.improved_lf.get()),
+            ("Both Improved", both_improved, self.improved_pf.get(), self.improved_lf.get())
         ]
 
-        for i, (text, command) in enumerate(menu_options):
-            btn = tk.Button(
-                buttons_frame,
-                text=text,
-                command=command,
-                font=('Arial', 14),
-                bg='#3498db',
-                fg='white',
-                width=40,
-                height=2,
-                relief=tk.RAISED,
-                bd=3
-            )
-            btn.pack(pady=10)
-            btn.bind('<Enter>', lambda e, b=btn: b.config(bg='#2980b9'))
-            btn.bind('<Leave>', lambda e, b=btn: b.config(bg='#3498db'))
+        for name, result, pf, lf in scenarios:
+            self.results_text.insert(tk.END, f"{name}:\n")
+            self.results_text.insert(tk.END, f"  PF: {pf:.2f}, LF: {lf:.2f}%\n")
+            self.results_text.insert(tk.END, f"  Demand: {result['max_demand_kva']:.2f} kVA\n")
+            self.results_text.insert(tk.END, f"  Energy: {result['energy_kwh']:.2f} kWh\n")
+            self.results_text.insert(tk.END, f"  Total Cost: Rs. {result['total_cost']:.2f}\n")
+            self.results_text.insert(tk.END, f"  Cost/kWh: Rs. {result['cost_per_kwh']:.4f}\n\n")
 
-        # Exit button
-        exit_btn = tk.Button(
-            buttons_frame,
-            text="Exit",
-            command=self.root.quit,
-            font=('Arial', 14),
-            bg='#e74c3c',
-            fg='white',
-            width=40,
-            height=2,
-            relief=tk.RAISED,
-            bd=3
-        )
-        exit_btn.pack(pady=20)
-        exit_btn.bind('<Enter>', lambda e: exit_btn.config(bg='#c0392b'))
-        exit_btn.bind('<Leave>', lambda e: exit_btn.config(bg='#e74c3c'))
+        # Savings
+        self.results_text.insert(tk.END, "SAVINGS ANALYSIS:\n")
+        self.results_text.insert(tk.END, f"  PF improvement only: Rs. {original['total_cost'] - pf_improved['total_cost']:.2f}\n")
+        self.results_text.insert(tk.END, f"  LF improvement (cost increase): Rs. {lf_improved['total_cost'] - original['total_cost']:.2f}\n")
+        self.results_text.insert(tk.END, f"  Both improvements: Rs. {original['total_cost'] - both_improved['total_cost']:.2f}\n")
 
-    def show_depreciation_example(self):
-        """Example 50.3: Depreciation calculation"""
-        self.clear_window()
+        # Visualization
+        self.fig.clear()
 
-        frame = tk.Frame(self.root, bg='white')
-        frame.pack(fill=tk.BOTH, expand=True)
+        # Plot 1: Total cost comparison
+        ax1 = self.fig.add_subplot(1, 2, 1)
+        names = ['Original', 'PF\nImproved', 'LF\nImproved', 'Both\nImproved']
+        costs = [s[1]['total_cost'] for s in scenarios]
+        colors = ['red', 'orange', 'yellow', 'green']
+        bars = ax1.bar(names, costs, color=colors, alpha=0.7, edgecolor='black')
+        ax1.set_ylabel('Total Annual Cost (Rs.)', fontweight='bold')
+        ax1.set_title('Total Cost Comparison', fontweight='bold')
+        ax1.grid(axis='y', alpha=0.3)
 
-        # Back button
-        back_btn = tk.Button(frame, text="← Back to Menu", command=self.create_main_menu,
-                            font=('Arial', 10), bg='#95a5a6', fg='white')
-        back_btn.pack(anchor='nw', padx=10, pady=10)
+        # Add value labels on bars
+        for bar in bars:
+            height = bar.get_height()
+            ax1.text(bar.get_x() + bar.get_width()/2., height,
+                    f'Rs. {height:.0f}',
+                    ha='center', va='bottom', fontsize=9)
 
+        # Plot 2: Cost per kWh comparison
+        ax2 = self.fig.add_subplot(1, 2, 2)
+        cost_per_kwh = [s[1]['cost_per_kwh'] for s in scenarios]
+        bars = ax2.bar(names, cost_per_kwh, color=colors, alpha=0.7, edgecolor='black')
+        ax2.set_ylabel('Cost per kWh (Rs.)', fontweight='bold')
+        ax2.set_title('Unit Cost Comparison', fontweight='bold')
+        ax2.grid(axis='y', alpha=0.3)
+
+        # Add value labels on bars
+        for bar in bars:
+            height = bar.get_height()
+            ax2.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{height:.4f}',
+                    ha='center', va='bottom', fontsize=9)
+
+        self.fig.tight_layout()
+        self.canvas.draw()
+
+
+class DCMotorSimulator(ttk.Frame):
+    """DC Motor Dynamic Simulation with ODE Solvers"""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.running = False
+        self.simulation_data = None
+        self.create_widgets()
+
+    def create_widgets(self):
         # Title
-        title = tk.Label(frame, text="Example 50.3: Plant Depreciation Analysis",
-                        font=('Arial', 20, 'bold'), bg='white')
-        title.pack(pady=20)
-
-        # Input frame
-        input_frame = tk.LabelFrame(frame, text="Input Parameters", font=('Arial', 12, 'bold'),
-                                   bg='white', padx=20, pady=20)
-        input_frame.pack(padx=20, pady=10, fill='x')
-
-        # Initial cost
-        tk.Label(input_frame, text="Initial Cost (Rs. Lakhs):", bg='white', font=('Arial', 11)).grid(row=0, column=0, sticky='w', pady=5)
-        initial_cost_var = tk.DoubleVar(value=5.0)
-        tk.Entry(input_frame, textvariable=initial_cost_var, font=('Arial', 11), width=15).grid(row=0, column=1, pady=5)
-
-        # Salvage value
-        tk.Label(input_frame, text="Salvage Value (Rs. Lakhs):", bg='white', font=('Arial', 11)).grid(row=1, column=0, sticky='w', pady=5)
-        salvage_var = tk.DoubleVar(value=1.0)
-        tk.Entry(input_frame, textvariable=salvage_var, font=('Arial', 11), width=15).grid(row=1, column=1, pady=5)
-
-        # Useful life
-        tk.Label(input_frame, text="Useful Life (years):", bg='white', font=('Arial', 11)).grid(row=2, column=0, sticky='w', pady=5)
-        life_var = tk.IntVar(value=20)
-        tk.Entry(input_frame, textvariable=life_var, font=('Arial', 11), width=15).grid(row=2, column=1, pady=5)
-
-        # Interest rate for sinking fund
-        tk.Label(input_frame, text="Interest Rate (%):", bg='white', font=('Arial', 11)).grid(row=3, column=0, sticky='w', pady=5)
-        rate_var = tk.DoubleVar(value=8.0)
-        tk.Entry(input_frame, textvariable=rate_var, font=('Arial', 11), width=15).grid(row=3, column=1, pady=5)
-
-        # Results frame
-        results_frame = tk.LabelFrame(frame, text="Results", font=('Arial', 12, 'bold'),
-                                     bg='white', padx=20, pady=20)
-        results_frame.pack(padx=20, pady=10, fill='both', expand=True)
-
-        results_text = scrolledtext.ScrolledText(results_frame, font=('Courier', 10), height=15, width=80)
-        results_text.pack(fill='both', expand=True)
-
-        def calculate():
-            try:
-                C = initial_cost_var.get() * 100000  # Convert lakhs to rupees
-                S = salvage_var.get() * 100000
-                n = life_var.get()
-                i = rate_var.get() / 100
-                t = n / 2  # Half-way through life
-
-                results_text.delete(1.0, tk.END)
-                results_text.insert(tk.END, "="*70 + "\n")
-                results_text.insert(tk.END, "PLANT DEPRECIATION ANALYSIS\n")
-                results_text.insert(tk.END, "="*70 + "\n\n")
-
-                results_text.insert(tk.END, f"Initial Cost: Rs. {C:,.2f}\n")
-                results_text.insert(tk.END, f"Salvage Value: Rs. {S:,.2f}\n")
-                results_text.insert(tk.END, f"Useful Life: {n} years\n")
-                results_text.insert(tk.END, f"Interest Rate: {rate_var.get()}%\n")
-                results_text.insert(tk.END, f"Evaluation Time: {t} years (half-way)\n\n")
-
-                # (a) Straight-line depreciation
-                results_text.insert(tk.END, "-"*70 + "\n")
-                results_text.insert(tk.END, "(a) STRAIGHT-LINE DEPRECIATION METHOD\n")
-                results_text.insert(tk.END, "-"*70 + "\n\n")
-
-                annual_depreciation = (C - S) / n
-                total_depreciation = annual_depreciation * t
-                book_value_sl = C - total_depreciation
-
-                results_text.insert(tk.END, f"Annual Depreciation = (C - S) / n\n")
-                results_text.insert(tk.END, f"                   = ({C:,.2f} - {S:,.2f}) / {n}\n")
-                results_text.insert(tk.END, f"                   = Rs. {annual_depreciation:,.2f} per year\n\n")
-
-                results_text.insert(tk.END, f"Total Depreciation after {t} years = {annual_depreciation:,.2f} × {t}\n")
-                results_text.insert(tk.END, f"                                    = Rs. {total_depreciation:,.2f}\n\n")
-
-                results_text.insert(tk.END, f"Book Value after {t} years = {C:,.2f} - {total_depreciation:,.2f}\n")
-                results_text.insert(tk.END, f"                           = Rs. {book_value_sl:,.2f}\n\n")
-                results_text.insert(tk.END, f"RESULT: Rs. {book_value_sl/100000:.2f} Lakhs\n\n")
-
-                # (b) Sinking fund method
-                results_text.insert(tk.END, "-"*70 + "\n")
-                results_text.insert(tk.END, "(b) SINKING FUND METHOD\n")
-                results_text.insert(tk.END, "-"*70 + "\n\n")
-
-                # Sinking fund formula: A = P * [(1+i)^n - 1] / i
-                # where A is the amount to be accumulated (C - S)
-                # We need to find the accumulated amount after t years
-
-                # Annual deposit
-                annual_deposit = (C - S) * i / ((1 + i)**n - 1)
-
-                # Accumulated amount after t years
-                accumulated = annual_deposit * (((1 + i)**t - 1) / i)
-                book_value_sf = C - accumulated
-
-                results_text.insert(tk.END, f"Annual Sinking Fund Deposit:\n")
-                results_text.insert(tk.END, f"D = (C - S) × i / [(1+i)^n - 1]\n")
-                results_text.insert(tk.END, f"  = ({C:,.2f} - {S:,.2f}) × {i} / [(1+{i})^{n} - 1]\n")
-                results_text.insert(tk.END, f"  = Rs. {annual_deposit:,.2f} per year\n\n")
-
-                results_text.insert(tk.END, f"Accumulated Fund after {t} years:\n")
-                results_text.insert(tk.END, f"F = D × [(1+i)^t - 1] / i\n")
-                results_text.insert(tk.END, f"  = {annual_deposit:,.2f} × [(1+{i})^{t} - 1] / {i}\n")
-                results_text.insert(tk.END, f"  = Rs. {accumulated:,.2f}\n\n")
-
-                results_text.insert(tk.END, f"Book Value after {t} years = {C:,.2f} - {accumulated:,.2f}\n")
-                results_text.insert(tk.END, f"                           = Rs. {book_value_sf:,.2f}\n\n")
-                results_text.insert(tk.END, f"RESULT: Rs. {book_value_sf/100000:.2f} Lakhs\n\n")
-
-                results_text.insert(tk.END, "="*70 + "\n")
-                results_text.insert(tk.END, "COMPARISON\n")
-                results_text.insert(tk.END, "="*70 + "\n")
-                results_text.insert(tk.END, f"Straight-line method: Rs. {book_value_sl/100000:.2f} Lakhs\n")
-                results_text.insert(tk.END, f"Sinking fund method:  Rs. {book_value_sf/100000:.2f} Lakhs\n")
-                results_text.insert(tk.END, f"Difference:           Rs. {abs(book_value_sl - book_value_sf)/100000:.2f} Lakhs\n")
-
-            except Exception as e:
-                messagebox.showerror("Error", f"Calculation error: {str(e)}")
-
-        # Calculate button
-        calc_btn = tk.Button(frame, text="Calculate", command=calculate,
-                           font=('Arial', 12, 'bold'), bg='#27ae60', fg='white',
-                           width=20, height=2)
-        calc_btn.pack(pady=10)
-
-    def show_load_example(self):
-        """Example 50.4: Load and Energy Analysis"""
-        self.clear_window()
-
-        frame = tk.Frame(self.root, bg='white')
-        frame.pack(fill=tk.BOTH, expand=True)
-
-        # Back button
-        back_btn = tk.Button(frame, text="← Back to Menu", command=self.create_main_menu,
-                            font=('Arial', 10), bg='#95a5a6', fg='white')
-        back_btn.pack(anchor='nw', padx=10, pady=10)
-
-        # Title
-        title = tk.Label(frame, text="Example 50.4: Load and Energy Consumption Analysis",
-                        font=('Arial', 20, 'bold'), bg='white')
-        title.pack(pady=20)
-
-        # Input frame
-        input_frame = tk.LabelFrame(frame, text="Connected Load", font=('Arial', 12, 'bold'),
-                                   bg='white', padx=20, pady=20)
-        input_frame.pack(padx=20, pady=10, fill='x')
-
-        # Lamps
-        tk.Label(input_frame, text="Number of Lamps:", bg='white', font=('Arial', 11)).grid(row=0, column=0, sticky='w', pady=5)
-        num_lamps_var = tk.IntVar(value=10)
-        tk.Entry(input_frame, textvariable=num_lamps_var, font=('Arial', 11), width=15).grid(row=0, column=1, pady=5)
-
-        tk.Label(input_frame, text="Lamp Power (W):", bg='white', font=('Arial', 11)).grid(row=1, column=0, sticky='w', pady=5)
-        lamp_power_var = tk.IntVar(value=60)
-        tk.Entry(input_frame, textvariable=lamp_power_var, font=('Arial', 11), width=15).grid(row=1, column=1, pady=5)
-
-        tk.Label(input_frame, text="Lamps Used Daily:", bg='white', font=('Arial', 11)).grid(row=2, column=0, sticky='w', pady=5)
-        lamps_used_var = tk.IntVar(value=8)
-        tk.Entry(input_frame, textvariable=lamps_used_var, font=('Arial', 11), width=15).grid(row=2, column=1, pady=5)
-
-        tk.Label(input_frame, text="Lamp Usage (hours/day):", bg='white', font=('Arial', 11)).grid(row=3, column=0, sticky='w', pady=5)
-        lamp_hours_var = tk.IntVar(value=5)
-        tk.Entry(input_frame, textvariable=lamp_hours_var, font=('Arial', 11), width=15).grid(row=3, column=1, pady=5)
-
-        # Heaters
-        tk.Label(input_frame, text="Number of Heaters:", bg='white', font=('Arial', 11)).grid(row=0, column=2, sticky='w', pady=5, padx=(20,0))
-        num_heaters_var = tk.IntVar(value=2)
-        tk.Entry(input_frame, textvariable=num_heaters_var, font=('Arial', 11), width=15).grid(row=0, column=3, pady=5)
-
-        tk.Label(input_frame, text="Heater Power (W):", bg='white', font=('Arial', 11)).grid(row=1, column=2, sticky='w', pady=5, padx=(20,0))
-        heater_power_var = tk.IntVar(value=1000)
-        tk.Entry(input_frame, textvariable=heater_power_var, font=('Arial', 11), width=15).grid(row=1, column=3, pady=5)
-
-        tk.Label(input_frame, text="Heater Usage (hours/day):", bg='white', font=('Arial', 11)).grid(row=2, column=2, sticky='w', pady=5, padx=(20,0))
-        heater_hours_var = tk.IntVar(value=3)
-        tk.Entry(input_frame, textvariable=heater_hours_var, font=('Arial', 11), width=15).grid(row=2, column=3, pady=5)
-
-        # Maximum demand
-        tk.Label(input_frame, text="Maximum Demand (W):", bg='white', font=('Arial', 11)).grid(row=4, column=0, sticky='w', pady=5)
-        max_demand_var = tk.IntVar(value=1500)
-        tk.Entry(input_frame, textvariable=max_demand_var, font=('Arial', 11), width=15).grid(row=4, column=1, pady=5)
-
-        # Results frame
-        results_frame = tk.LabelFrame(frame, text="Results", font=('Arial', 12, 'bold'),
-                                     bg='white', padx=20, pady=20)
-        results_frame.pack(padx=20, pady=10, fill='both', expand=True)
-
-        results_text = scrolledtext.ScrolledText(results_frame, font=('Courier', 10), height=15, width=80)
-        results_text.pack(fill='both', expand=True)
-
-        def calculate():
-            try:
-                num_lamps = num_lamps_var.get()
-                lamp_power = lamp_power_var.get()
-                lamps_used = lamps_used_var.get()
-                lamp_hours = lamp_hours_var.get()
-
-                num_heaters = num_heaters_var.get()
-                heater_power = heater_power_var.get()
-                heater_hours = heater_hours_var.get()
-
-                max_demand = max_demand_var.get()
-
-                results_text.delete(1.0, tk.END)
-                results_text.insert(tk.END, "="*70 + "\n")
-                results_text.insert(tk.END, "LOAD AND ENERGY CONSUMPTION ANALYSIS\n")
-                results_text.insert(tk.END, "="*70 + "\n\n")
-
-                # Connected Load
-                results_text.insert(tk.END, "CONNECTED LOAD CALCULATION:\n")
-                results_text.insert(tk.END, "-"*70 + "\n")
-
-                lamp_total = num_lamps * lamp_power
-                heater_total = num_heaters * heater_power
-                total_connected_load = lamp_total + heater_total
-
-                results_text.insert(tk.END, f"Lamps:   {num_lamps} × {lamp_power}W = {lamp_total}W\n")
-                results_text.insert(tk.END, f"Heaters: {num_heaters} × {heater_power}W = {heater_total}W\n")
-                results_text.insert(tk.END, f"\nTotal Connected Load = {total_connected_load}W = {total_connected_load/1000:.2f}kW\n\n")
-
-                # Daily Energy Consumption
-                results_text.insert(tk.END, "DAILY ENERGY CONSUMPTION:\n")
-                results_text.insert(tk.END, "-"*70 + "\n")
-
-                lamp_energy = lamps_used * lamp_power * lamp_hours  # Wh
-                heater_energy = num_heaters * heater_power * heater_hours  # Wh
-                daily_energy = lamp_energy + heater_energy  # Wh
-
-                results_text.insert(tk.END, f"Lamps:   {lamps_used} × {lamp_power}W × {lamp_hours}h = {lamp_energy}Wh\n")
-                results_text.insert(tk.END, f"Heaters: {num_heaters} × {heater_power}W × {heater_hours}h = {heater_energy}Wh\n")
-                results_text.insert(tk.END, f"\nDaily Energy Consumption = {daily_energy}Wh = {daily_energy/1000:.2f}kWh\n\n")
-
-                # Monthly Energy Consumption (assuming 30 days)
-                monthly_energy = daily_energy * 30 / 1000  # kWh
-                results_text.insert(tk.END, "MONTHLY ENERGY CONSUMPTION (30 days):\n")
-                results_text.insert(tk.END, "-"*70 + "\n")
-                results_text.insert(tk.END, f"Monthly Energy = {daily_energy}Wh × 30 days = {monthly_energy:.2f}kWh\n\n")
-
-                # Load Factor
-                results_text.insert(tk.END, "LOAD FACTOR CALCULATION:\n")
-                results_text.insert(tk.END, "-"*70 + "\n")
-
-                # Average Load = Total Energy / Total Time (24 hours)
-                average_load = daily_energy / 24  # W
-                load_factor = (average_load / max_demand) * 100
-
-                results_text.insert(tk.END, f"Average Load = Daily Energy / 24 hours\n")
-                results_text.insert(tk.END, f"             = {daily_energy}Wh / 24h\n")
-                results_text.insert(tk.END, f"             = {average_load:.2f}W\n\n")
-
-                results_text.insert(tk.END, f"Load Factor = (Average Load / Maximum Demand) × 100\n")
-                results_text.insert(tk.END, f"            = ({average_load:.2f}W / {max_demand}W) × 100\n")
-                results_text.insert(tk.END, f"            = {load_factor:.2f}%\n\n")
-
-                # Summary
-                results_text.insert(tk.END, "="*70 + "\n")
-                results_text.insert(tk.END, "SUMMARY\n")
-                results_text.insert(tk.END, "="*70 + "\n")
-                results_text.insert(tk.END, f"Total Connected Load:        {total_connected_load/1000:.2f} kW\n")
-                results_text.insert(tk.END, f"Maximum Demand:              {max_demand/1000:.2f} kW\n")
-                results_text.insert(tk.END, f"Daily Energy Consumption:    {daily_energy/1000:.2f} kWh\n")
-                results_text.insert(tk.END, f"Monthly Energy Consumption:  {monthly_energy:.2f} kWh\n")
-                results_text.insert(tk.END, f"Average Load:                {average_load/1000:.2f} kW\n")
-                results_text.insert(tk.END, f"Load Factor:                 {load_factor:.2f}%\n")
-
-                # Demand Factor
-                demand_factor = (max_demand / total_connected_load) * 100
-                results_text.insert(tk.END, f"Demand Factor:               {demand_factor:.2f}%\n")
-
-            except Exception as e:
-                messagebox.showerror("Error", f"Calculation error: {str(e)}")
-
-        # Calculate button
-        calc_btn = tk.Button(frame, text="Calculate", command=calculate,
-                           font=('Arial', 12, 'bold'), bg='#27ae60', fg='white',
-                           width=20, height=2)
-        calc_btn.pack(pady=10)
-
-    def show_dc_motor_simulation(self):
-        """DC Motor Dynamic Simulation with ODE solvers"""
-        self.clear_window()
-
-        main_frame = tk.Frame(self.root, bg='white')
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Back button
-        back_btn = tk.Button(main_frame, text="← Back to Menu", command=self.create_main_menu,
-                            font=('Arial', 10), bg='#95a5a6', fg='white')
-        back_btn.pack(anchor='nw', padx=10, pady=10)
-
-        # Title
-        title = tk.Label(main_frame, text="DC Motor Dynamic Simulation",
-                        font=('Arial', 20, 'bold'), bg='white')
-        title.pack(pady=10)
-
-        # Control panel
-        control_frame = tk.LabelFrame(main_frame, text="Motor Parameters",
-                                      font=('Arial', 11, 'bold'), bg='white', padx=15, pady=15)
-        control_frame.pack(side=tk.LEFT, padx=10, pady=10, fill=tk.Y)
-
-        # Parameters
-        params = {}
-
-        param_list = [
-            ("Voltage (V):", "voltage", 220, 0, 500),
-            ("Armature Resistance (Ω):", "Ra", 0.5, 0.1, 5),
-            ("Armature Inductance (H):", "La", 0.01, 0.001, 0.1),
-            ("Back EMF Constant (Vs/rad):", "Ke", 0.8, 0.1, 2),
-            ("Torque Constant (Nm/A):", "Kt", 0.8, 0.1, 2),
-            ("Inertia (kg·m²):", "J", 0.02, 0.001, 0.5),
-            ("Friction Coefficient:", "B", 0.001, 0, 0.01),
-            ("Load Torque (Nm):", "TL", 10, 0, 50)
+        title = ttk.Label(self, text="DC Motor Dynamic Simulation",
+                         font=('Arial', 16, 'bold'))
+        title.grid(row=0, column=0, columnspan=2, pady=10)
+
+        # Parameters Frame
+        params_frame = ttk.LabelFrame(self, text="Motor Parameters", padding=10)
+        params_frame.grid(row=1, column=0, padx=10, pady=10, sticky='nsew')
+
+        # Motor parameters
+        params = [
+            ("Armature Resistance (Ra, Ω):", 0.5, 0.1, 5.0),
+            ("Armature Inductance (La, H):", 0.05, 0.01, 0.5),
+            ("Back EMF Constant (Ke, V·s/rad):", 0.1, 0.01, 1.0),
+            ("Torque Constant (Kt, N·m/A):", 0.1, 0.01, 1.0),
+            ("Moment of Inertia (J, kg·m²):", 0.01, 0.001, 0.1),
+            ("Friction Coefficient (B, N·m·s/rad):", 0.001, 0.0001, 0.01),
+            ("Applied Voltage (V):", 24.0, 0.0, 100.0),
+            ("Load Torque (N·m):", 0.1, 0.0, 5.0)
         ]
 
-        for i, (label, key, default, min_val, max_val) in enumerate(param_list):
-            tk.Label(control_frame, text=label, bg='white', font=('Arial', 9)).grid(row=i, column=0, sticky='w', pady=3)
-
+        self.param_vars = {}
+        for i, (label, default, min_val, max_val) in enumerate(params):
+            ttk.Label(params_frame, text=label).grid(row=i, column=0, sticky='w', pady=3)
             var = tk.DoubleVar(value=default)
-            params[key] = var
+            self.param_vars[label.split('(')[0].strip()] = var
 
-            slider = tk.Scale(control_frame, from_=min_val, to=max_val, resolution=(max_val-min_val)/100,
-                            orient=tk.HORIZONTAL, variable=var, length=200)
-            slider.grid(row=i, column=1, pady=3)
+            scale = ttk.Scale(params_frame, from_=min_val, to=max_val, variable=var,
+                            orient='horizontal', length=200)
+            scale.grid(row=i, column=1, pady=3, padx=5)
 
-            entry = tk.Entry(control_frame, textvariable=var, width=8, font=('Arial', 9))
-            entry.grid(row=i, column=2, pady=3, padx=5)
+            value_label = ttk.Label(params_frame, text=f"{default:.4f}")
+            value_label.grid(row=i, column=2, pady=3)
+            var.trace_add('write', lambda *args, v=var, l=value_label: l.config(text=f"{v.get():.4f}"))
 
-        # Solver selection
-        tk.Label(control_frame, text="ODE Solver:", bg='white', font=('Arial', 9, 'bold')).grid(row=len(param_list), column=0, sticky='w', pady=10)
-        solver_var = tk.StringVar(value="RK45")
-        solver_combo = ttk.Combobox(control_frame, textvariable=solver_var,
-                                    values=["RK45", "Euler", "RK23", "DOP853"],
-                                    state='readonly', width=15)
-        solver_combo.grid(row=len(param_list), column=1, pady=10)
+        # Simulation Settings Frame
+        settings_frame = ttk.LabelFrame(self, text="Simulation Settings", padding=10)
+        settings_frame.grid(row=1, column=1, padx=10, pady=10, sticky='nsew')
 
-        # Simulation time
-        tk.Label(control_frame, text="Simulation Time (s):", bg='white', font=('Arial', 9)).grid(row=len(param_list)+1, column=0, sticky='w', pady=3)
-        sim_time_var = tk.DoubleVar(value=5.0)
-        tk.Entry(control_frame, textvariable=sim_time_var, width=8, font=('Arial', 9)).grid(row=len(param_list)+1, column=1, sticky='w', pady=3)
+        ttk.Label(settings_frame, text="ODE Solver:").grid(row=0, column=0, sticky='w', pady=5)
+        self.solver_var = tk.StringVar(value="RK45")
+        solvers = ["RK45", "Euler", "RK23", "DOP853"]
+        solver_combo = ttk.Combobox(settings_frame, textvariable=self.solver_var,
+                                   values=solvers, state='readonly', width=15)
+        solver_combo.grid(row=0, column=1, pady=5)
 
-        # Control buttons
-        button_frame = tk.Frame(control_frame, bg='white')
-        button_frame.grid(row=len(param_list)+2, column=0, columnspan=3, pady=20)
+        ttk.Label(settings_frame, text="Simulation Time (s):").grid(row=1, column=0, sticky='w', pady=5)
+        self.sim_time = tk.DoubleVar(value=2.0)
+        ttk.Scale(settings_frame, from_=0.5, to=10.0, variable=self.sim_time,
+                 orient='horizontal', length=200).grid(row=1, column=1, pady=5)
+        self.time_label = ttk.Label(settings_frame, text="2.0 s")
+        self.time_label.grid(row=1, column=2, pady=5)
+        self.sim_time.trace_add('write', lambda *args: self.time_label.config(text=f"{self.sim_time.get():.1f} s"))
 
-        self.dc_motor_running = False
+        ttk.Label(settings_frame, text="Time Step (s):").grid(row=2, column=0, sticky='w', pady=5)
+        self.time_step = tk.DoubleVar(value=0.001)
+        ttk.Entry(settings_frame, textvariable=self.time_step, width=18).grid(row=2, column=1, pady=5)
 
-        def start_simulation():
-            if self.dc_motor_running:
-                messagebox.showwarning("Warning", "Simulation already running!")
-                return
+        # Control Buttons
+        button_frame = ttk.Frame(settings_frame)
+        button_frame.grid(row=3, column=0, columnspan=3, pady=15)
 
-            self.dc_motor_running = True
-            start_btn.config(state='disabled')
-            stop_btn.config(state='normal')
+        self.start_btn = ttk.Button(button_frame, text="▶ Start", command=self.start_simulation)
+        self.start_btn.pack(side='left', padx=5)
 
-            # Get parameters
-            V = params['voltage'].get()
-            Ra = params['Ra'].get()
-            La = params['La'].get()
-            Ke = params['Ke'].get()
-            Kt = params['Kt'].get()
-            J = params['J'].get()
-            B = params['B'].get()
-            TL = params['TL'].get()
-            sim_time = sim_time_var.get()
-            solver = solver_var.get()
+        self.stop_btn = ttk.Button(button_frame, text="■ Stop", command=self.stop_simulation, state='disabled')
+        self.stop_btn.pack(side='left', padx=5)
 
-            # DC Motor differential equations:
-            # di/dt = (V - Ra*i - Ke*ω) / La
-            # dω/dt = (Kt*i - TL - B*ω) / J
+        self.reset_btn = ttk.Button(button_frame, text="↺ Reset", command=self.reset_simulation)
+        self.reset_btn.pack(side='left', padx=5)
 
-            def dc_motor_ode(t, y):
-                i, omega = y
-                di_dt = (V - Ra * i - Ke * omega) / La
-                domega_dt = (Kt * i - TL - B * omega) / J
-                return [di_dt, domega_dt]
+        # Results Frame
+        results_frame = ttk.LabelFrame(self, text="Simulation Results", padding=10)
+        results_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=10, sticky='nsew')
 
-            # Initial conditions: [current, angular velocity]
-            y0 = [0, 0]
+        # Create matplotlib figure
+        self.fig = Figure(figsize=(12, 6), dpi=80)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=results_frame)
+        self.canvas.get_tk_widget().pack(fill='both', expand=True)
 
-            # Solve ODE
+        # Configure grid weights
+        self.grid_rowconfigure(2, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+
+    def dc_motor_ode(self, t, y, Ra, La, Ke, Kt, J, B, V, Tl):
+        """
+        DC Motor differential equations
+        y[0] = ia (armature current)
+        y[1] = omega (angular velocity)
+        """
+        ia, omega = y
+
+        # dia/dt = (V - Ra*ia - Ke*omega) / La
+        dia_dt = (V - Ra * ia - Ke * omega) / La
+
+        # domega/dt = (Kt*ia - B*omega - Tl) / J
+        domega_dt = (Kt * ia - B * omega - Tl) / J
+
+        return [dia_dt, domega_dt]
+
+    def euler_method(self, f, t_span, y0, dt, args):
+        """Euler method for ODE solving"""
+        t_start, t_end = t_span
+        t = np.arange(t_start, t_end + dt, dt)
+        y = np.zeros((len(t), len(y0)))
+        y[0] = y0
+
+        for i in range(1, len(t)):
+            dydt = f(t[i-1], y[i-1], *args)
+            y[i] = y[i-1] + np.array(dydt) * dt
+
+        return t, y
+
+    def start_simulation(self):
+        """Start the simulation"""
+        self.running = True
+        self.start_btn.config(state='disabled')
+        self.stop_btn.config(state='normal')
+
+        # Run simulation in separate thread
+        thread = threading.Thread(target=self.run_simulation)
+        thread.daemon = True
+        thread.start()
+
+    def run_simulation(self):
+        """Run the motor simulation"""
+        # Get parameters
+        Ra = self.param_vars["Armature Resistance"].get()
+        La = self.param_vars["Armature Inductance"].get()
+        Ke = self.param_vars["Back EMF Constant"].get()
+        Kt = self.param_vars["Torque Constant"].get()
+        J = self.param_vars["Moment of Inertia"].get()
+        B = self.param_vars["Friction Coefficient"].get()
+        V = self.param_vars["Applied Voltage"].get()
+        Tl = self.param_vars["Load Torque"].get()
+
+        # Initial conditions [ia, omega]
+        y0 = [0.0, 0.0]
+
+        # Time span
+        t_span = (0, self.sim_time.get())
+        dt = self.time_step.get()
+
+        # Solve based on selected method
+        solver = self.solver_var.get()
+
+        try:
             if solver == "Euler":
-                # Euler method
-                t_span = (0, sim_time)
-                t_eval = np.linspace(0, sim_time, 1000)
-                dt = t_eval[1] - t_eval[0]
-
-                t_result = [0]
-                y_result = [y0]
-
-                for _ in range(len(t_eval) - 1):
-                    y_current = y_result[-1]
-                    dydt = dc_motor_ode(t_result[-1], y_current)
-                    y_new = [y_current[j] + dydt[j] * dt for j in range(len(y_current))]
-                    t_result.append(t_result[-1] + dt)
-                    y_result.append(y_new)
-
-                t_result = np.array(t_result)
-                y_result = np.array(y_result)
-                current = y_result[:, 0]
-                omega = y_result[:, 1]
+                t, y = self.euler_method(
+                    self.dc_motor_ode, t_span, y0, dt,
+                    args=(Ra, La, Ke, Kt, J, B, V, Tl)
+                )
+                ia = y[:, 0]
+                omega = y[:, 1]
             else:
-                # Use scipy solve_ivp
-                sol = solve_ivp(dc_motor_ode, (0, sim_time), y0, method=solver,
-                              t_eval=np.linspace(0, sim_time, 1000), dense_output=True)
-                t_result = sol.t
-                current = sol.y[0]
-                omega = sol.y[1]
+                # Use scipy's solve_ivp
+                sol = solve_ivp(
+                    self.dc_motor_ode,
+                    t_span,
+                    y0,
+                    method=solver,
+                    args=(Ra, La, Ke, Kt, J, B, V, Tl),
+                    dense_output=True,
+                    max_step=dt
+                )
+                t = np.linspace(t_span[0], t_span[1], 1000)
+                y = sol.sol(t)
+                ia = y[0, :]
+                omega = y[1, :]
 
             # Calculate derived quantities
-            speed_rpm = omega * 60 / (2 * np.pi)
-            voltage_rms = np.full_like(t_result, V)
-            current_rms = np.abs(current)
-            torque = Kt * current
-            power = voltage_rms * current_rms / 1000  # kW
+            speed_rpm = omega * 60 / (2 * np.pi)  # Convert to RPM
+            back_emf = Ke * omega
+            torque = Kt * ia
+            power = torque * omega
 
-            # Plot results
-            ax1.clear()
-            ax2.clear()
-            ax3.clear()
-            ax4.clear()
+            # Store results
+            self.simulation_data = {
+                't': t,
+                'ia': ia,
+                'omega': omega,
+                'speed_rpm': speed_rpm,
+                'back_emf': back_emf,
+                'torque': torque,
+                'power': power
+            }
 
-            ax1.plot(t_result, current_rms, 'b-', linewidth=2, label='Current (A)')
-            ax1.set_ylabel('Current (A)', fontsize=10, fontweight='bold')
-            ax1.set_xlabel('Time (s)', fontsize=10)
-            ax1.grid(True, alpha=0.3)
-            ax1.legend(loc='upper right')
-            ax1.set_title('Armature Current', fontweight='bold')
+            # Update plot
+            self.after(0, self.update_plot)
 
-            ax2.plot(t_result, speed_rpm, 'r-', linewidth=2, label='Speed (RPM)')
-            ax2.set_ylabel('Speed (RPM)', fontsize=10, fontweight='bold')
-            ax2.set_xlabel('Time (s)', fontsize=10)
-            ax2.grid(True, alpha=0.3)
-            ax2.legend(loc='upper right')
-            ax2.set_title('Motor Speed', fontweight='bold')
+        except Exception as e:
+            messagebox.showerror("Simulation Error", f"Error during simulation: {str(e)}")
 
-            ax3.plot(t_result, voltage_rms, 'g-', linewidth=2, label='Voltage (V)')
-            ax3.set_ylabel('Voltage (V)', fontsize=10, fontweight='bold')
-            ax3.set_xlabel('Time (s)', fontsize=10)
-            ax3.grid(True, alpha=0.3)
-            ax3.legend(loc='upper right')
-            ax3.set_title('Supply Voltage (RMS)', fontweight='bold')
+        finally:
+            self.running = False
+            self.after(0, lambda: self.start_btn.config(state='normal'))
+            self.after(0, lambda: self.stop_btn.config(state='disabled'))
 
-            ax4.plot(t_result, torque, 'm-', linewidth=2, label='Torque (Nm)')
-            ax4.set_ylabel('Torque (Nm)', fontsize=10, fontweight='bold')
-            ax4.set_xlabel('Time (s)', fontsize=10)
-            ax4.grid(True, alpha=0.3)
-            ax4.legend(loc='upper right')
-            ax4.set_title('Motor Torque', fontweight='bold')
+    def update_plot(self):
+        """Update the visualization"""
+        if self.simulation_data is None:
+            return
 
-            fig.tight_layout()
-            canvas.draw()
+        self.fig.clear()
 
-            # Update info
-            info_text.delete(1.0, tk.END)
-            info_text.insert(tk.END, f"Solver: {solver}\n")
-            info_text.insert(tk.END, f"Simulation Time: {sim_time:.2f} s\n\n")
-            info_text.insert(tk.END, f"Steady-State Results:\n")
-            info_text.insert(tk.END, f"  Current: {current[-1]:.2f} A (RMS)\n")
-            info_text.insert(tk.END, f"  Speed: {speed_rpm[-1]:.2f} RPM\n")
-            info_text.insert(tk.END, f"  Torque: {torque[-1]:.2f} Nm\n")
-            info_text.insert(tk.END, f"  Power: {power[-1]:.3f} kW\n")
+        t = self.simulation_data['t']
 
-            self.dc_motor_running = False
-            start_btn.config(state='normal')
-            stop_btn.config(state='disabled')
+        # Create subplots
+        ax1 = self.fig.add_subplot(2, 2, 1)
+        ax1.plot(t, self.simulation_data['speed_rpm'], 'b-', linewidth=2)
+        ax1.set_xlabel('Time (s)', fontweight='bold')
+        ax1.set_ylabel('Speed (RPM)', fontweight='bold')
+        ax1.set_title('Motor Speed Response', fontweight='bold')
+        ax1.grid(True, alpha=0.3)
 
-        def stop_simulation():
-            self.dc_motor_running = False
-            start_btn.config(state='normal')
-            stop_btn.config(state='disabled')
+        ax2 = self.fig.add_subplot(2, 2, 2)
+        ax2.plot(t, self.simulation_data['ia'], 'r-', linewidth=2)
+        ax2.set_xlabel('Time (s)', fontweight='bold')
+        ax2.set_ylabel('Current (A)', fontweight='bold')
+        ax2.set_title('Armature Current', fontweight='bold')
+        ax2.grid(True, alpha=0.3)
 
-        def reset_simulation():
-            self.dc_motor_running = False
-            ax1.clear()
-            ax2.clear()
-            ax3.clear()
-            ax4.clear()
-            fig.tight_layout()
-            canvas.draw()
-            info_text.delete(1.0, tk.END)
-            start_btn.config(state='normal')
-            stop_btn.config(state='disabled')
+        ax3 = self.fig.add_subplot(2, 2, 3)
+        ax3.plot(t, self.simulation_data['torque'], 'g-', linewidth=2)
+        ax3.set_xlabel('Time (s)', fontweight='bold')
+        ax3.set_ylabel('Torque (N·m)', fontweight='bold')
+        ax3.set_title('Motor Torque', fontweight='bold')
+        ax3.grid(True, alpha=0.3)
 
-        start_btn = tk.Button(button_frame, text="Start", command=start_simulation,
-                            bg='#27ae60', fg='white', font=('Arial', 10, 'bold'), width=10)
-        start_btn.pack(side=tk.LEFT, padx=5)
+        ax4 = self.fig.add_subplot(2, 2, 4)
+        ax4.plot(t, self.simulation_data['power'], 'm-', linewidth=2)
+        ax4.set_xlabel('Time (s)', fontweight='bold')
+        ax4.set_ylabel('Power (W)', fontweight='bold')
+        ax4.set_title('Mechanical Power', fontweight='bold')
+        ax4.grid(True, alpha=0.3)
 
-        stop_btn = tk.Button(button_frame, text="Stop", command=stop_simulation,
-                           bg='#e74c3c', fg='white', font=('Arial', 10, 'bold'), width=10, state='disabled')
-        stop_btn.pack(side=tk.LEFT, padx=5)
+        self.fig.tight_layout()
+        self.canvas.draw()
 
-        reset_btn = tk.Button(button_frame, text="Reset", command=reset_simulation,
-                            bg='#f39c12', fg='white', font=('Arial', 10, 'bold'), width=10)
-        reset_btn.pack(side=tk.LEFT, padx=5)
+    def stop_simulation(self):
+        """Stop the simulation"""
+        self.running = False
+        self.start_btn.config(state='normal')
+        self.stop_btn.config(state='disabled')
 
-        # Info panel
-        info_frame = tk.LabelFrame(control_frame, text="Simulation Info",
-                                   font=('Arial', 10, 'bold'), bg='white', padx=10, pady=10)
-        info_frame.grid(row=len(param_list)+3, column=0, columnspan=3, pady=10, sticky='ew')
+    def reset_simulation(self):
+        """Reset the simulation"""
+        self.running = False
+        self.simulation_data = None
+        self.fig.clear()
+        self.canvas.draw()
+        self.start_btn.config(state='normal')
+        self.stop_btn.config(state='disabled')
 
-        info_text = tk.Text(info_frame, height=10, width=35, font=('Courier', 8))
-        info_text.pack()
 
-        # Visualization frame
-        viz_frame = tk.Frame(main_frame, bg='white')
-        viz_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+class SynchronousMachineSimulator(ttk.Frame):
+    """Synchronous Machine/Generator Simulator"""
 
-        # Create matplotlib figure
-        fig = Figure(figsize=(10, 8))
-        ax1 = fig.add_subplot(2, 2, 1)
-        ax2 = fig.add_subplot(2, 2, 2)
-        ax3 = fig.add_subplot(2, 2, 3)
-        ax4 = fig.add_subplot(2, 2, 4)
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.running = False
+        self.simulation_data = None
+        self.create_widgets()
 
-        canvas = FigureCanvasTkAgg(fig, master=viz_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-    def show_induction_motor_simulation(self):
-        """Induction Motor Simulation"""
-        self.clear_window()
-
-        main_frame = tk.Frame(self.root, bg='white')
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Back button
-        back_btn = tk.Button(main_frame, text="← Back to Menu", command=self.create_main_menu,
-                            font=('Arial', 10), bg='#95a5a6', fg='white')
-        back_btn.pack(anchor='nw', padx=10, pady=10)
-
+    def create_widgets(self):
         # Title
-        title = tk.Label(main_frame, text="Three-Phase Induction Motor Simulation",
-                        font=('Arial', 20, 'bold'), bg='white')
-        title.pack(pady=10)
+        title = ttk.Label(self, text="Synchronous Machine Dynamic Simulator",
+                         font=('Arial', 16, 'bold'))
+        title.grid(row=0, column=0, columnspan=2, pady=10)
 
-        # Control panel
-        control_frame = tk.LabelFrame(main_frame, text="Motor Parameters",
-                                      font=('Arial', 11, 'bold'), bg='white', padx=15, pady=15)
-        control_frame.pack(side=tk.LEFT, padx=10, pady=10, fill=tk.Y)
+        # Parameters Frame
+        params_frame = ttk.LabelFrame(self, text="Machine Parameters", padding=10)
+        params_frame.grid(row=1, column=0, padx=10, pady=10, sticky='nsew')
 
-        # Parameters
-        params = {}
-
-        param_list = [
-            ("Line Voltage (V):", "voltage", 415, 100, 690),
-            ("Frequency (Hz):", "freq", 50, 25, 60),
-            ("Stator Resistance (Ω):", "Rs", 0.5, 0.1, 2),
-            ("Rotor Resistance (Ω):", "Rr", 0.3, 0.1, 2),
-            ("Stator Reactance (Ω):", "Xs", 2.0, 0.5, 5),
-            ("Rotor Reactance (Ω):", "Xr", 2.0, 0.5, 5),
-            ("Magnetizing Reactance (Ω):", "Xm", 50, 10, 100),
-            ("Number of Poles:", "poles", 4, 2, 8),
-            ("Load Torque (Nm):", "TL", 50, 0, 200)
+        params = [
+            ("Rated Power (MVA):", 10.0, 1.0, 100.0),
+            ("Rated Voltage (kV):", 11.0, 1.0, 50.0),
+            ("Frequency (Hz):", 50.0, 50.0, 60.0),
+            ("d-axis Reactance (Xd, pu):", 1.8, 0.5, 3.0),
+            ("q-axis Reactance (Xq, pu):", 1.7, 0.5, 3.0),
+            ("Inertia Constant (H, s):", 5.0, 1.0, 10.0),
+            ("Damping Coefficient (D, pu):", 2.0, 0.5, 5.0),
+            ("Excitation Voltage (Ef, pu):", 1.5, 0.5, 3.0)
         ]
 
-        for i, (label, key, default, min_val, max_val) in enumerate(param_list):
-            tk.Label(control_frame, text=label, bg='white', font=('Arial', 9)).grid(row=i, column=0, sticky='w', pady=3)
-
+        self.param_vars = {}
+        for i, (label, default, min_val, max_val) in enumerate(params):
+            ttk.Label(params_frame, text=label).grid(row=i, column=0, sticky='w', pady=3)
             var = tk.DoubleVar(value=default)
-            params[key] = var
-
-            if key == "poles":
-                slider = tk.Scale(control_frame, from_=min_val, to=max_val, resolution=2,
-                                orient=tk.HORIZONTAL, variable=var, length=200)
-            else:
-                slider = tk.Scale(control_frame, from_=min_val, to=max_val, resolution=(max_val-min_val)/100,
-                                orient=tk.HORIZONTAL, variable=var, length=200)
-            slider.grid(row=i, column=1, pady=3)
-
-            entry = tk.Entry(control_frame, textvariable=var, width=8, font=('Arial', 9))
-            entry.grid(row=i, column=2, pady=3, padx=5)
-
-        # Control buttons
-        button_frame = tk.Frame(control_frame, bg='white')
-        button_frame.grid(row=len(param_list), column=0, columnspan=3, pady=20)
-
-        def calculate_performance():
-            try:
-                V_line = params['voltage'].get()
-                f = params['freq'].get()
-                Rs = params['Rs'].get()
-                Rr = params['Rr'].get()
-                Xs = params['Xs'].get()
-                Xr = params['Xr'].get()
-                Xm = params['Xm'].get()
-                poles = int(params['poles'].get())
-
-                # Synchronous speed
-                ns = 120 * f / poles  # RPM
-                ws = 2 * np.pi * ns / 60  # rad/s
-
-                # Phase voltage
-                V_ph = V_line / np.sqrt(3)
-
-                # Calculate performance for range of slips
-                slip = np.linspace(0.001, 1, 100)
-
-                current = []
-                torque = []
-                power_out = []
-                efficiency = []
-                pf = []
-
-                for s in slip:
-                    # Rotor impedance referred to stator
-                    Zr = Rr / s + 1j * Xr
-
-                    # Parallel combination of Xm and Zr
-                    Z_parallel = (1j * Xm * Zr) / (1j * Xm + Zr)
-
-                    # Total impedance
-                    Z_total = Rs + 1j * Xs + Z_parallel
-
-                    # Stator current (RMS)
-                    I_s = V_ph / Z_total
-                    I_s_mag = abs(I_s)
-                    current.append(I_s_mag)
-
-                    # Power factor
-                    angle = np.angle(Z_total)
-                    pf_val = np.cos(angle)
-                    pf.append(pf_val)
-
-                    # Air gap power
-                    I_r = V_ph / (Rs + 1j * Xs + Zr)
-                    P_ag = 3 * abs(I_r)**2 * Rr / s
-
-                    # Mechanical power
-                    P_mech = P_ag * (1 - s)
-
-                    # Torque
-                    n = ns * (1 - s)
-                    w = 2 * np.pi * n / 60
-                    T = P_mech / w if w > 0 else 0
-                    torque.append(T)
-
-                    # Output power
-                    power_out.append(P_mech / 1000)  # kW
-
-                    # Input power
-                    P_in = 3 * V_ph * I_s_mag * pf_val
-
-                    # Efficiency
-                    eff = (P_mech / P_in * 100) if P_in > 0 else 0
-                    efficiency.append(eff)
-
-                speed = ns * (1 - slip)
-
-                # Plot results
-                ax1.clear()
-                ax2.clear()
-                ax3.clear()
-                ax4.clear()
-
-                ax1.plot(speed, current, 'b-', linewidth=2)
-                ax1.set_ylabel('Current (A)', fontsize=10, fontweight='bold')
-                ax1.set_xlabel('Speed (RPM)', fontsize=10)
-                ax1.grid(True, alpha=0.3)
-                ax1.set_title('Stator Current vs Speed', fontweight='bold')
-
-                ax2.plot(speed, torque, 'r-', linewidth=2)
-                ax2.set_ylabel('Torque (Nm)', fontsize=10, fontweight='bold')
-                ax2.set_xlabel('Speed (RPM)', fontsize=10)
-                ax2.grid(True, alpha=0.3)
-                ax2.set_title('Torque-Speed Characteristic', fontweight='bold')
-
-                ax3.plot(speed, power_out, 'g-', linewidth=2)
-                ax3.set_ylabel('Power (kW)', fontsize=10, fontweight='bold')
-                ax3.set_xlabel('Speed (RPM)', fontsize=10)
-                ax3.grid(True, alpha=0.3)
-                ax3.set_title('Output Power vs Speed', fontweight='bold')
-
-                ax4.plot(speed, efficiency, 'm-', linewidth=2)
-                ax4.set_ylabel('Efficiency (%)', fontsize=10, fontweight='bold')
-                ax4.set_xlabel('Speed (RPM)', fontsize=10)
-                ax4.grid(True, alpha=0.3)
-                ax4.set_title('Efficiency vs Speed', fontweight='bold')
-
-                fig.tight_layout()
-                canvas.draw()
-
-                # Find maximum torque and starting torque
-                max_torque = max(torque)
-                max_torque_idx = torque.index(max_torque)
-                starting_torque = torque[-1]
-
-                # Update info
-                info_text.delete(1.0, tk.END)
-                info_text.insert(tk.END, f"Motor Specifications:\n")
-                info_text.insert(tk.END, f"  Synchronous Speed: {ns:.2f} RPM\n")
-                info_text.insert(tk.END, f"  Poles: {int(poles)}\n")
-                info_text.insert(tk.END, f"  Frequency: {f} Hz\n\n")
-                info_text.insert(tk.END, f"Performance:\n")
-                info_text.insert(tk.END, f"  Starting Torque: {starting_torque:.2f} Nm\n")
-                info_text.insert(tk.END, f"  Max Torque: {max_torque:.2f} Nm\n")
-                info_text.insert(tk.END, f"  @ Speed: {speed[max_torque_idx]:.2f} RPM\n")
-                info_text.insert(tk.END, f"  Max Efficiency: {max(efficiency):.2f}%\n")
-                info_text.insert(tk.END, f"  Max Power Factor: {max(pf):.3f}\n")
-
-            except Exception as e:
-                messagebox.showerror("Error", f"Calculation error: {str(e)}")
-
-        calc_btn = tk.Button(button_frame, text="Calculate", command=calculate_performance,
-                            bg='#27ae60', fg='white', font=('Arial', 10, 'bold'), width=15, height=2)
-        calc_btn.pack(pady=5)
-
-        reset_btn = tk.Button(button_frame, text="Reset", command=lambda: [ax.clear() for ax in [ax1, ax2, ax3, ax4]] or canvas.draw(),
-                            bg='#f39c12', fg='white', font=('Arial', 10, 'bold'), width=15)
-        reset_btn.pack(pady=5)
-
-        # Info panel
-        info_frame = tk.LabelFrame(control_frame, text="Motor Info",
-                                   font=('Arial', 10, 'bold'), bg='white', padx=10, pady=10)
-        info_frame.grid(row=len(param_list)+1, column=0, columnspan=3, pady=10, sticky='ew')
-
-        info_text = tk.Text(info_frame, height=12, width=35, font=('Courier', 8))
-        info_text.pack()
-
-        # Visualization frame
-        viz_frame = tk.Frame(main_frame, bg='white')
-        viz_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Create matplotlib figure
-        fig = Figure(figsize=(10, 8))
-        ax1 = fig.add_subplot(2, 2, 1)
-        ax2 = fig.add_subplot(2, 2, 2)
-        ax3 = fig.add_subplot(2, 2, 3)
-        ax4 = fig.add_subplot(2, 2, 4)
-
-        canvas = FigureCanvasTkAgg(fig, master=viz_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-    def show_rlc_circuit(self):
-        """RLC Circuit Analysis with Dynamic Simulation"""
-        self.clear_window()
-
-        main_frame = tk.Frame(self.root, bg='white')
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Back button
-        back_btn = tk.Button(main_frame, text="← Back to Menu", command=self.create_main_menu,
-                            font=('Arial', 10), bg='#95a5a6', fg='white')
-        back_btn.pack(anchor='nw', padx=10, pady=10)
-
-        # Title
-        title = tk.Label(main_frame, text="RLC Circuit Transient Analysis",
-                        font=('Arial', 20, 'bold'), bg='white')
-        title.pack(pady=10)
-
-        # Control panel
-        control_frame = tk.LabelFrame(main_frame, text="Circuit Parameters",
-                                      font=('Arial', 11, 'bold'), bg='white', padx=15, pady=15)
-        control_frame.pack(side=tk.LEFT, padx=10, pady=10, fill=tk.Y)
-
-        # Parameters
-        params = {}
-
-        param_list = [
-            ("Voltage (V):", "voltage", 100, 0, 500),
-            ("Resistance (Ω):", "R", 10, 0.1, 100),
-            ("Inductance (mH):", "L", 100, 1, 1000),
-            ("Capacitance (μF):", "C", 100, 1, 1000),
-            ("Frequency (Hz):", "freq", 50, 10, 1000)
-        ]
-
-        for i, (label, key, default, min_val, max_val) in enumerate(param_list):
-            tk.Label(control_frame, text=label, bg='white', font=('Arial', 9)).grid(row=i, column=0, sticky='w', pady=3)
-
-            var = tk.DoubleVar(value=default)
-            params[key] = var
-
-            slider = tk.Scale(control_frame, from_=min_val, to=max_val, resolution=(max_val-min_val)/100,
-                            orient=tk.HORIZONTAL, variable=var, length=200)
-            slider.grid(row=i, column=1, pady=3)
-
-            entry = tk.Entry(control_frame, textvariable=var, width=8, font=('Arial', 9))
-            entry.grid(row=i, column=2, pady=3, padx=5)
-
-        # Circuit type
-        tk.Label(control_frame, text="Circuit Type:", bg='white', font=('Arial', 9, 'bold')).grid(row=len(param_list), column=0, sticky='w', pady=10)
-        circuit_type_var = tk.StringVar(value="Series RLC")
-        circuit_combo = ttk.Combobox(control_frame, textvariable=circuit_type_var,
-                                    values=["Series RLC", "Parallel RLC", "Step Response"],
-                                    state='readonly', width=15)
-        circuit_combo.grid(row=len(param_list), column=1, pady=10)
-
-        # Solver selection
-        tk.Label(control_frame, text="ODE Solver:", bg='white', font=('Arial', 9, 'bold')).grid(row=len(param_list)+1, column=0, sticky='w', pady=5)
-        solver_var = tk.StringVar(value="RK45")
-        solver_combo = ttk.Combobox(control_frame, textvariable=solver_var,
-                                    values=["RK45", "Euler", "RK23"],
-                                    state='readonly', width=15)
-        solver_combo.grid(row=len(param_list)+1, column=1, pady=5)
-
-        # Control buttons
-        button_frame = tk.Frame(control_frame, bg='white')
-        button_frame.grid(row=len(param_list)+2, column=0, columnspan=3, pady=20)
-
-        def simulate():
-            try:
-                V0 = params['voltage'].get()
-                R = params['R'].get()
-                L = params['L'].get() / 1000  # Convert mH to H
-                C = params['C'].get() / 1e6  # Convert μF to F
-                freq = params['freq'].get()
-                circuit_type = circuit_type_var.get()
-                solver = solver_var.get()
-
-                omega = 2 * np.pi * freq
-                sim_time = 0.1  # 100ms
-
-                if circuit_type == "Step Response":
-                    # Step response of series RLC
-                    # Differential equation: L*d²i/dt² + R*di/dt + i/C = dV/dt
-                    # State variables: x1 = i, x2 = di/dt
-
-                    def rlc_ode(t, y):
-                        i, di_dt = y
-                        vc = (1/C) * i  # Simplified
-                        d2i_dt2 = (V0 - R * di_dt - vc) / L
-                        return [di_dt, d2i_dt2]
-
-                    y0 = [0, 0]
-
-                elif circuit_type == "Series RLC":
-                    # Series RLC with sinusoidal source
-                    def rlc_ode(t, y):
-                        i, q = y  # current and charge
-                        V = V0 * np.sin(omega * t)
-                        di_dt = (V - R * i - q / C) / L
-                        dq_dt = i
-                        return [di_dt, dq_dt]
-
-                    y0 = [0, 0]
-
-                else:  # Parallel RLC
-                    def rlc_ode(t, y):
-                        vc, i_L = y
-                        V = V0 * np.sin(omega * t)
-                        dvc_dt = (V / R - vc / R - i_L) / C
-                        di_L_dt = vc / L
-                        return [dvc_dt, di_L_dt]
-
-                    y0 = [0, 0]
-
-                # Solve
-                if solver == "Euler":
-                    t_eval = np.linspace(0, sim_time, 2000)
-                    dt = t_eval[1] - t_eval[0]
-
-                    t_result = [0]
-                    y_result = [y0]
-
-                    for _ in range(len(t_eval) - 1):
-                        y_current = y_result[-1]
-                        dydt = rlc_ode(t_result[-1], y_current)
-                        y_new = [y_current[j] + dydt[j] * dt for j in range(len(y_current))]
-                        t_result.append(t_result[-1] + dt)
-                        y_result.append(y_new)
-
-                    t_result = np.array(t_result)
-                    y_result = np.array(y_result)
-                else:
-                    sol = solve_ivp(rlc_ode, (0, sim_time), y0, method=solver,
-                                  t_eval=np.linspace(0, sim_time, 2000))
-                    t_result = sol.t
-                    y_result = sol.y.T
-
-                # Extract results
-                if circuit_type == "Parallel RLC":
-                    voltage = y_result[:, 0]
-                    current = y_result[:, 1]
-                else:
-                    current = y_result[:, 0]
-                    if circuit_type == "Series RLC":
-                        charge = y_result[:, 1]
-                        voltage = charge / C
-                    else:
-                        voltage = np.array([V0 * (1 - np.exp(-5*t)) for t in t_result])
-
-                # RMS values
-                current_rms = np.sqrt(np.mean(current**2))
-                voltage_rms = np.sqrt(np.mean(voltage**2))
-
-                # Power
-                power = voltage * current
-                avg_power = np.mean(power)
-
-                # Impedance
-                if circuit_type == "Series RLC":
-                    XL = omega * L
-                    XC = 1 / (omega * C)
-                    Z = np.sqrt(R**2 + (XL - XC)**2)
-                    resonant_freq = 1 / (2 * np.pi * np.sqrt(L * C))
-
-                # Plot
-                ax1.clear()
-                ax2.clear()
-                ax3.clear()
-                ax4.clear()
-
-                t_ms = t_result * 1000  # Convert to ms
-
-                ax1.plot(t_ms, current, 'b-', linewidth=2)
-                ax1.set_ylabel('Current (A)', fontsize=10, fontweight='bold')
-                ax1.set_xlabel('Time (ms)', fontsize=10)
-                ax1.grid(True, alpha=0.3)
-                ax1.set_title('Current vs Time', fontweight='bold')
-
-                ax2.plot(t_ms, voltage, 'r-', linewidth=2)
-                ax2.set_ylabel('Voltage (V)', fontsize=10, fontweight='bold')
-                ax2.set_xlabel('Time (ms)', fontsize=10)
-                ax2.grid(True, alpha=0.3)
-                ax2.set_title('Voltage vs Time', fontweight='bold')
-
-                ax3.plot(t_ms, power, 'g-', linewidth=2)
-                ax3.set_ylabel('Power (W)', fontsize=10, fontweight='bold')
-                ax3.set_xlabel('Time (ms)', fontsize=10)
-                ax3.grid(True, alpha=0.3)
-                ax3.set_title('Instantaneous Power', fontweight='bold')
-
-                # Phase diagram
-                ax4.plot(current, voltage, 'm-', linewidth=1.5)
-                ax4.set_xlabel('Current (A)', fontsize=10, fontweight='bold')
-                ax4.set_ylabel('Voltage (V)', fontsize=10, fontweight='bold')
-                ax4.grid(True, alpha=0.3)
-                ax4.set_title('Phase Diagram (V-I)', fontweight='bold')
-
-                fig.tight_layout()
-                canvas.draw()
-
-                # Update info
-                info_text.delete(1.0, tk.END)
-                info_text.insert(tk.END, f"Circuit: {circuit_type}\n")
-                info_text.insert(tk.END, f"Solver: {solver}\n\n")
-                info_text.insert(tk.END, f"Parameters:\n")
-                info_text.insert(tk.END, f"  R = {R:.2f} Ω\n")
-                info_text.insert(tk.END, f"  L = {L*1000:.2f} mH\n")
-                info_text.insert(tk.END, f"  C = {C*1e6:.2f} μF\n\n")
-                info_text.insert(tk.END, f"Results:\n")
-                info_text.insert(tk.END, f"  I(RMS) = {current_rms:.4f} A\n")
-                info_text.insert(tk.END, f"  V(RMS) = {voltage_rms:.2f} V\n")
-                info_text.insert(tk.END, f"  P(avg) = {avg_power:.2f} W\n")
-
-                if circuit_type == "Series RLC":
-                    info_text.insert(tk.END, f"  Z = {Z:.2f} Ω\n")
-                    info_text.insert(tk.END, f"  f₀ = {resonant_freq:.2f} Hz\n")
-                    Q = (omega * L) / R
-                    info_text.insert(tk.END, f"  Q = {Q:.2f}\n")
-
-            except Exception as e:
-                messagebox.showerror("Error", f"Simulation error: {str(e)}")
-
-        start_btn = tk.Button(button_frame, text="Simulate", command=simulate,
-                            bg='#27ae60', fg='white', font=('Arial', 10, 'bold'), width=15, height=2)
-        start_btn.pack(pady=5)
-
-        reset_btn = tk.Button(button_frame, text="Reset", command=lambda: [ax.clear() for ax in [ax1, ax2, ax3, ax4]] or canvas.draw(),
-                            bg='#f39c12', fg='white', font=('Arial', 10, 'bold'), width=15)
-        reset_btn.pack(pady=5)
-
-        # Info panel
-        info_frame = tk.LabelFrame(control_frame, text="Circuit Info",
-                                   font=('Arial', 10, 'bold'), bg='white', padx=10, pady=10)
-        info_frame.grid(row=len(param_list)+3, column=0, columnspan=3, pady=10, sticky='ew')
-
-        info_text = tk.Text(info_frame, height=14, width=35, font=('Courier', 8))
-        info_text.pack()
-
-        # Visualization frame
-        viz_frame = tk.Frame(main_frame, bg='white')
-        viz_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Create matplotlib figure
-        fig = Figure(figsize=(10, 8))
-        ax1 = fig.add_subplot(2, 2, 1)
-        ax2 = fig.add_subplot(2, 2, 2)
-        ax3 = fig.add_subplot(2, 2, 3)
-        ax4 = fig.add_subplot(2, 2, 4)
-
-        canvas = FigureCanvasTkAgg(fig, master=viz_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-    def show_power_system(self):
-        """Power System Transient Analysis"""
-        self.clear_window()
-
-        main_frame = tk.Frame(self.root, bg='white')
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Back button
-        back_btn = tk.Button(main_frame, text="← Back to Menu", command=self.create_main_menu,
-                            font=('Arial', 10), bg='#95a5a6', fg='white')
-        back_btn.pack(anchor='nw', padx=10, pady=10)
-
-        # Title
-        title = tk.Label(main_frame, text="Power System Transient Analysis",
-                        font=('Arial', 20, 'bold'), bg='white')
-        title.pack(pady=10)
-
-        # Control panel
-        control_frame = tk.LabelFrame(main_frame, text="System Parameters",
-                                      font=('Arial', 11, 'bold'), bg='white', padx=15, pady=15)
-        control_frame.pack(side=tk.LEFT, padx=10, pady=10, fill=tk.Y)
-
-        # Parameters
-        params = {}
-
-        param_list = [
-            ("Line Voltage (kV):", "voltage", 11, 1, 33),
-            ("Generator Inertia (MJ/MVA):", "H", 5, 2, 10),
-            ("Load Power (MW):", "P_load", 50, 10, 200),
-            ("Damping Coefficient:", "D", 2, 0.5, 5),
-            ("Fault Duration (ms):", "fault_time", 150, 50, 500),
-            ("Line Reactance (%):", "X", 10, 5, 30)
-        ]
-
-        for i, (label, key, default, min_val, max_val) in enumerate(param_list):
-            tk.Label(control_frame, text=label, bg='white', font=('Arial', 9)).grid(row=i, column=0, sticky='w', pady=3)
-
-            var = tk.DoubleVar(value=default)
-            params[key] = var
-
-            slider = tk.Scale(control_frame, from_=min_val, to=max_val, resolution=(max_val-min_val)/100,
-                            orient=tk.HORIZONTAL, variable=var, length=200)
-            slider.grid(row=i, column=1, pady=3)
-
-            entry = tk.Entry(control_frame, textvariable=var, width=8, font=('Arial', 9))
-            entry.grid(row=i, column=2, pady=3, padx=5)
-
-        # Fault type
-        tk.Label(control_frame, text="Fault Type:", bg='white', font=('Arial', 9, 'bold')).grid(row=len(param_list), column=0, sticky='w', pady=10)
-        fault_type_var = tk.StringVar(value="Three-Phase")
-        fault_combo = ttk.Combobox(control_frame, textvariable=fault_type_var,
-                                   values=["Three-Phase", "Line-to-Ground", "Line-to-Line", "Load Variation"],
+            self.param_vars[label.split('(')[0].strip()] = var
+
+            scale = ttk.Scale(params_frame, from_=min_val, to=max_val, variable=var,
+                            orient='horizontal', length=200)
+            scale.grid(row=i, column=1, pady=3, padx=5)
+
+            value_label = ttk.Label(params_frame, text=f"{default:.2f}")
+            value_label.grid(row=i, column=2, pady=3)
+            var.trace_add('write', lambda *args, v=var, l=value_label: l.config(text=f"{v.get():.2f}"))
+
+        # Operating Conditions Frame
+        conditions_frame = ttk.LabelFrame(self, text="Operating Conditions", padding=10)
+        conditions_frame.grid(row=1, column=1, padx=10, pady=10, sticky='nsew')
+
+        ttk.Label(conditions_frame, text="Initial Power Angle (deg):").grid(row=0, column=0, sticky='w', pady=5)
+        self.delta0 = tk.DoubleVar(value=30.0)
+        ttk.Scale(conditions_frame, from_=0.0, to=90.0, variable=self.delta0,
+                 orient='horizontal', length=200).grid(row=0, column=1, pady=5)
+        self.delta_label = ttk.Label(conditions_frame, text="30.0°")
+        self.delta_label.grid(row=0, column=2, pady=5)
+        self.delta0.trace_add('write', lambda *args: self.delta_label.config(text=f"{self.delta0.get():.1f}°"))
+
+        ttk.Label(conditions_frame, text="Mechanical Power (pu):").grid(row=1, column=0, sticky='w', pady=5)
+        self.pm = tk.DoubleVar(value=0.8)
+        ttk.Scale(conditions_frame, from_=0.0, to=1.5, variable=self.pm,
+                 orient='horizontal', length=200).grid(row=1, column=1, pady=5)
+        self.pm_label = ttk.Label(conditions_frame, text="0.80")
+        self.pm_label.grid(row=1, column=2, pady=5)
+        self.pm.trace_add('write', lambda *args: self.pm_label.config(text=f"{self.pm.get():.2f}"))
+
+        ttk.Label(conditions_frame, text="Fault/Disturbance:").grid(row=2, column=0, sticky='w', pady=5)
+        self.fault_type = tk.StringVar(value="None")
+        fault_combo = ttk.Combobox(conditions_frame, textvariable=self.fault_type,
+                                  values=["None", "3-Phase Fault", "Load Change", "Voltage Dip"],
+                                  state='readonly', width=15)
+        fault_combo.grid(row=2, column=1, pady=5)
+
+        ttk.Label(conditions_frame, text="Solver Method:").grid(row=3, column=0, sticky='w', pady=5)
+        self.solver_var = tk.StringVar(value="RK45")
+        solver_combo = ttk.Combobox(conditions_frame, textvariable=self.solver_var,
+                                   values=["RK45", "Euler", "RK23"],
                                    state='readonly', width=15)
-        fault_combo.grid(row=len(param_list), column=1, pady=10)
+        solver_combo.grid(row=3, column=1, pady=5)
 
-        # Solver
-        tk.Label(control_frame, text="Solver:", bg='white', font=('Arial', 9, 'bold')).grid(row=len(param_list)+1, column=0, sticky='w', pady=5)
-        solver_var = tk.StringVar(value="RK45")
-        solver_combo = ttk.Combobox(control_frame, textvariable=solver_var,
-                                    values=["RK45", "RK23", "DOP853"],
-                                    state='readonly', width=15)
-        solver_combo.grid(row=len(param_list)+1, column=1, pady=5)
+        # Control Buttons
+        button_frame = ttk.Frame(conditions_frame)
+        button_frame.grid(row=4, column=0, columnspan=3, pady=15)
 
-        # Control buttons
-        button_frame = tk.Frame(control_frame, bg='white')
-        button_frame.grid(row=len(param_list)+2, column=0, columnspan=3, pady=20)
+        self.start_btn = ttk.Button(button_frame, text="▶ Start", command=self.start_simulation)
+        self.start_btn.pack(side='left', padx=5)
 
-        def simulate():
-            try:
-                V = params['voltage'].get()
-                H = params['H'].get()
-                P_load = params['P_load'].get()
-                D = params['D'].get()
-                fault_duration = params['fault_time'].get() / 1000  # Convert to seconds
-                X = params['X'].get() / 100
-                fault_type = fault_type_var.get()
-                solver = solver_var.get()
+        self.stop_btn = ttk.Button(button_frame, text="■ Stop", command=self.stop_simulation, state='disabled')
+        self.stop_btn.pack(side='left', padx=5)
 
-                # Swing equation: 2H/ω₀ * d²δ/dt² + D*dδ/dt = Pm - Pe
-                # State variables: δ (angle), ω (angular velocity deviation)
+        self.reset_btn = ttk.Button(button_frame, text="↺ Reset", command=self.reset_simulation)
+        self.reset_btn.pack(side='left', padx=5)
 
-                omega_0 = 2 * np.pi * 50  # 50 Hz
-                P_m = P_load  # Mechanical power
+        # Results Frame
+        results_frame = ttk.LabelFrame(self, text="Transient Stability Analysis", padding=10)
+        results_frame.grid(row=2, column=0, columnspan=2, padx=10, pady=10, sticky='nsew')
 
-                def swing_equation(t, y):
-                    delta, omega_dev = y
+        self.fig = Figure(figsize=(12, 6), dpi=80)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=results_frame)
+        self.canvas.get_tk_widget().pack(fill='both', expand=True)
 
-                    # Determine electrical power based on fault condition
-                    if t < fault_duration:
-                        # During fault
-                        if fault_type == "Three-Phase":
-                            P_e = 0  # Complete loss of electrical power
-                        elif fault_type == "Line-to-Ground":
-                            P_e = 0.5 * P_load * np.sin(delta)
-                        elif fault_type == "Line-to-Line":
-                            P_e = 0.7 * P_load * np.sin(delta)
-                        else:  # Load variation
-                            P_e = 0.3 * P_load * np.sin(delta)
-                    else:
-                        # Post-fault
-                        if fault_type == "Load Variation":
-                            P_e = 1.5 * P_load * np.sin(delta)
-                        else:
-                            P_e = P_load * np.sin(delta) / X
+        # Configure grid weights
+        self.grid_rowconfigure(2, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
 
-                    d_delta = omega_dev
-                    d_omega = (omega_0 / (2 * H)) * (P_m - P_e - D * omega_dev)
+    def sync_machine_ode(self, t, y, H, D, Pm, Ef, Xd, Xq, V, omega_s, fault_active):
+        """
+        Synchronous machine swing equation
+        y[0] = delta (power angle in radians)
+        y[1] = omega (angular velocity in rad/s)
+        """
+        delta, omega = y
 
-                    return [d_delta, d_omega]
+        # Calculate electrical power
+        if fault_active:
+            Pe = 0  # During fault, electrical power is zero
+        else:
+            # Simplified power equation: Pe = (Ef * V / Xd) * sin(delta)
+            Pe = (Ef * V / Xd) * np.sin(delta)
 
-                # Initial conditions: steady-state
-                delta_0 = np.arcsin(P_load * X / P_load)  # Initial power angle
-                y0 = [delta_0, 0]
+        # Swing equation
+        # d(delta)/dt = omega - omega_s
+        ddelta_dt = omega - omega_s
 
-                sim_time = 2.0  # 2 seconds
+        # d(omega)/dt = (omega_s / (2*H)) * (Pm - Pe - D*(omega - omega_s))
+        domega_dt = (omega_s / (2 * H)) * (Pm - Pe - D * (omega - omega_s))
 
-                sol = solve_ivp(swing_equation, (0, sim_time), y0, method=solver,
-                              t_eval=np.linspace(0, sim_time, 2000))
+        return [ddelta_dt, domega_dt]
 
-                t_result = sol.t
-                delta = sol.y[0]
-                omega_dev = sol.y[1]
+    def euler_method(self, f, t_span, y0, dt, args_func):
+        """Euler method with time-varying arguments"""
+        t_start, t_end = t_span
+        t = np.arange(t_start, t_end + dt, dt)
+        y = np.zeros((len(t), len(y0)))
+        y[0] = y0
 
-                # Convert to degrees
-                delta_deg = np.degrees(delta)
+        for i in range(1, len(t)):
+            args = args_func(t[i-1])
+            dydt = f(t[i-1], y[i-1], *args)
+            y[i] = y[i-1] + np.array(dydt) * dt
 
-                # Frequency deviation
-                freq_dev = omega_dev * 50 / omega_0
-                frequency = 50 + freq_dev
+        return t, y
 
-                # Calculate power
-                P_e = np.array([P_load * np.sin(d) / X if t >= fault_duration else 0
-                               for t, d in zip(t_result, delta)])
+    def start_simulation(self):
+        """Start the simulation"""
+        self.running = True
+        self.start_btn.config(state='disabled')
+        self.stop_btn.config(state='normal')
 
-                # Voltage (simplified)
-                V_pu = np.abs(np.cos(delta))
-                voltage = V * V_pu
+        thread = threading.Thread(target=self.run_simulation)
+        thread.daemon = True
+        thread.start()
 
-                # Plot
-                ax1.clear()
-                ax2.clear()
-                ax3.clear()
-                ax4.clear()
+    def run_simulation(self):
+        """Run the synchronous machine simulation"""
+        try:
+            # Get parameters
+            H = self.param_vars["Inertia Constant"].get()
+            D = self.param_vars["Damping Coefficient"].get()
+            Pm = self.pm.get()
+            Ef = self.param_vars["Excitation Voltage"].get()
+            Xd = self.param_vars["d-axis Reactance"].get()
+            Xq = self.param_vars["q-axis Reactance"].get()
+            freq = self.param_vars["Frequency"].get()
+            V = 1.0  # Per unit voltage
 
-                ax1.plot(t_result * 1000, delta_deg, 'b-', linewidth=2)
-                ax1.axvline(fault_duration * 1000, color='r', linestyle='--', label='Fault Cleared')
-                ax1.set_ylabel('Power Angle (°)', fontsize=10, fontweight='bold')
-                ax1.set_xlabel('Time (ms)', fontsize=10)
-                ax1.grid(True, alpha=0.3)
-                ax1.legend()
-                ax1.set_title('Power Angle Response', fontweight='bold')
+            omega_s = 2 * np.pi * freq
 
-                ax2.plot(t_result * 1000, frequency, 'r-', linewidth=2)
-                ax2.axhline(50, color='k', linestyle='--', alpha=0.5)
-                ax2.axvline(fault_duration * 1000, color='r', linestyle='--', label='Fault Cleared')
-                ax2.set_ylabel('Frequency (Hz)', fontsize=10, fontweight='bold')
-                ax2.set_xlabel('Time (ms)', fontsize=10)
-                ax2.grid(True, alpha=0.3)
-                ax2.set_title('Frequency Deviation', fontweight='bold')
+            # Initial conditions
+            delta0_rad = np.radians(self.delta0.get())
+            omega0 = omega_s
+            y0 = [delta0_rad, omega0]
 
-                ax3.plot(t_result * 1000, P_e, 'g-', linewidth=2, label='Electrical Power')
-                ax3.axhline(P_m, color='b', linestyle='--', label='Mechanical Power')
-                ax3.axvline(fault_duration * 1000, color='r', linestyle='--', label='Fault Cleared')
-                ax3.set_ylabel('Power (MW)', fontsize=10, fontweight='bold')
-                ax3.set_xlabel('Time (ms)', fontsize=10)
-                ax3.grid(True, alpha=0.3)
-                ax3.legend()
-                ax3.set_title('Power Response', fontweight='bold')
+            # Simulation time
+            t_span = (0, 5.0)
+            dt = 0.001
 
-                ax4.plot(t_result * 1000, voltage, 'm-', linewidth=2)
-                ax4.axvline(fault_duration * 1000, color='r', linestyle='--', label='Fault Cleared')
-                ax4.set_ylabel('Voltage (kV)', fontsize=10, fontweight='bold')
-                ax4.set_xlabel('Time (ms)', fontsize=10)
-                ax4.grid(True, alpha=0.3)
-                ax4.set_title('Voltage Profile', fontweight='bold')
+            # Determine fault timing
+            fault_type = self.fault_type.get()
+            fault_start = 1.0
+            fault_end = 1.15
 
-                fig.tight_layout()
-                canvas.draw()
+            # Create args function for time-varying fault
+            def args_func(t):
+                fault_active = (fault_type != "None" and fault_start <= t < fault_end)
+                return (H, D, Pm, Ef, Xd, Xq, V, omega_s, fault_active)
 
-                # Stability check
-                max_angle = np.max(np.abs(delta_deg))
-                is_stable = max_angle < 90
+            solver = self.solver_var.get()
 
-                # Update info
-                info_text.delete(1.0, tk.END)
-                info_text.insert(tk.END, f"Fault Type: {fault_type}\n")
-                info_text.insert(tk.END, f"Solver: {solver}\n")
-                info_text.insert(tk.END, f"Fault Duration: {fault_duration*1000:.0f} ms\n\n")
-                info_text.insert(tk.END, f"System Parameters:\n")
-                info_text.insert(tk.END, f"  Voltage: {V:.1f} kV\n")
-                info_text.insert(tk.END, f"  Inertia: {H:.1f} MJ/MVA\n")
-                info_text.insert(tk.END, f"  Load: {P_load:.1f} MW\n\n")
-                info_text.insert(tk.END, f"Transient Response:\n")
-                info_text.insert(tk.END, f"  Max Angle: {max_angle:.2f}°\n")
-                info_text.insert(tk.END, f"  Max Freq Dev: ±{np.max(np.abs(freq_dev)):.3f} Hz\n")
-                info_text.insert(tk.END, f"  Min Voltage: {np.min(voltage):.2f} kV\n\n")
+            if solver == "Euler":
+                t, y = self.euler_method(
+                    self.sync_machine_ode, t_span, y0, dt, args_func
+                )
+                delta = y[:, 0]
+                omega = y[:, 1]
+            else:
+                # For RK45, we need to handle time-varying fault differently
+                t_eval = np.linspace(t_span[0], t_span[1], 5000)
 
-                if is_stable:
-                    info_text.insert(tk.END, "Status: STABLE ✓\n", 'stable')
-                    info_text.tag_config('stable', foreground='green')
+                # Split into segments
+                if fault_type != "None":
+                    # Pre-fault
+                    sol1 = solve_ivp(
+                        self.sync_machine_ode,
+                        (0, fault_start),
+                        y0,
+                        method=solver,
+                        args=(H, D, Pm, Ef, Xd, Xq, V, omega_s, False),
+                        dense_output=True
+                    )
+
+                    # During fault
+                    sol2 = solve_ivp(
+                        self.sync_machine_ode,
+                        (fault_start, fault_end),
+                        sol1.y[:, -1],
+                        method=solver,
+                        args=(H, D, Pm, Ef, Xd, Xq, V, omega_s, True),
+                        dense_output=True
+                    )
+
+                    # Post-fault
+                    sol3 = solve_ivp(
+                        self.sync_machine_ode,
+                        (fault_end, t_span[1]),
+                        sol2.y[:, -1],
+                        method=solver,
+                        args=(H, D, Pm, Ef, Xd, Xq, V, omega_s, False),
+                        dense_output=True
+                    )
+
+                    # Combine solutions
+                    t1 = t_eval[t_eval < fault_start]
+                    t2 = t_eval[(t_eval >= fault_start) & (t_eval < fault_end)]
+                    t3 = t_eval[t_eval >= fault_end]
+
+                    t = np.concatenate([t1, t2, t3])
+                    y1 = sol1.sol(t1)
+                    y2 = sol2.sol(t2)
+                    y3 = sol3.sol(t3)
+
+                    delta = np.concatenate([y1[0, :], y2[0, :], y3[0, :]])
+                    omega = np.concatenate([y1[1, :], y2[1, :], y3[1, :]])
                 else:
-                    info_text.insert(tk.END, "Status: UNSTABLE ✗\n", 'unstable')
-                    info_text.tag_config('unstable', foreground='red')
+                    sol = solve_ivp(
+                        self.sync_machine_ode,
+                        t_span,
+                        y0,
+                        method=solver,
+                        args=(H, D, Pm, Ef, Xd, Xq, V, omega_s, False),
+                        dense_output=True
+                    )
+                    t = t_eval
+                    y = sol.sol(t)
+                    delta = y[0, :]
+                    omega = y[1, :]
 
-            except Exception as e:
-                messagebox.showerror("Error", f"Simulation error: {str(e)}")
+            # Calculate derived quantities
+            delta_deg = np.degrees(delta)
+            omega_pu = (omega - omega_s) / omega_s * 100  # Percentage deviation
 
-        start_btn = tk.Button(button_frame, text="Simulate", command=simulate,
-                            bg='#27ae60', fg='white', font=('Arial', 10, 'bold'), width=15, height=2)
-        start_btn.pack(pady=5)
+            # Calculate electrical power
+            Pe = np.zeros_like(t)
+            for i, (ti, di) in enumerate(zip(t, delta)):
+                fault_active = (fault_type != "None" and fault_start <= ti < fault_end)
+                if not fault_active:
+                    Pe[i] = (Ef * V / Xd) * np.sin(di)
 
-        reset_btn = tk.Button(button_frame, text="Reset", command=lambda: [ax.clear() for ax in [ax1, ax2, ax3, ax4]] or canvas.draw(),
-                            bg='#f39c12', fg='white', font=('Arial', 10, 'bold'), width=15)
-        reset_btn.pack(pady=5)
+            # Store results
+            self.simulation_data = {
+                't': t,
+                'delta': delta_deg,
+                'omega': omega_pu,
+                'Pe': Pe,
+                'Pm': Pm
+            }
 
-        # Info panel
-        info_frame = tk.LabelFrame(control_frame, text="System Info",
-                                   font=('Arial', 10, 'bold'), bg='white', padx=10, pady=10)
-        info_frame.grid(row=len(param_list)+3, column=0, columnspan=3, pady=10, sticky='ew')
+            self.after(0, self.update_plot)
 
-        info_text = tk.Text(info_frame, height=16, width=35, font=('Courier', 8))
-        info_text.pack()
+        except Exception as e:
+            messagebox.showerror("Simulation Error", f"Error: {str(e)}")
 
-        # Visualization frame
-        viz_frame = tk.Frame(main_frame, bg='white')
-        viz_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        finally:
+            self.running = False
+            self.after(0, lambda: self.start_btn.config(state='normal'))
+            self.after(0, lambda: self.stop_btn.config(state='disabled'))
 
-        # Create matplotlib figure
-        fig = Figure(figsize=(10, 8))
-        ax1 = fig.add_subplot(2, 2, 1)
-        ax2 = fig.add_subplot(2, 2, 2)
-        ax3 = fig.add_subplot(2, 2, 3)
-        ax4 = fig.add_subplot(2, 2, 4)
+    def update_plot(self):
+        """Update the visualization"""
+        if self.simulation_data is None:
+            return
 
-        canvas = FigureCanvasTkAgg(fig, master=viz_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self.fig.clear()
 
-    def clear_window(self):
-        """Clear all widgets from the window"""
-        for widget in self.root.winfo_children():
-            widget.destroy()
+        t = self.simulation_data['t']
 
-    def on_window_resize(self, event):
-        """Handle window resize events for auto-scaling"""
-        # This will be called on resize, matplotlib canvas auto-adjusts
-        pass
+        # Power angle
+        ax1 = self.fig.add_subplot(2, 2, 1)
+        ax1.plot(t, self.simulation_data['delta'], 'b-', linewidth=2)
+        ax1.set_xlabel('Time (s)', fontweight='bold')
+        ax1.set_ylabel('Power Angle (degrees)', fontweight='bold')
+        ax1.set_title('Rotor Angle Swing', fontweight='bold')
+        ax1.grid(True, alpha=0.3)
+        ax1.axhline(y=90, color='r', linestyle='--', alpha=0.5, label='Stability Limit')
+        ax1.legend()
+
+        # Speed deviation
+        ax2 = self.fig.add_subplot(2, 2, 2)
+        ax2.plot(t, self.simulation_data['omega'], 'r-', linewidth=2)
+        ax2.set_xlabel('Time (s)', fontweight='bold')
+        ax2.set_ylabel('Speed Deviation (%)', fontweight='bold')
+        ax2.set_title('Rotor Speed Deviation', fontweight='bold')
+        ax2.grid(True, alpha=0.3)
+        ax2.axhline(y=0, color='k', linestyle='-', alpha=0.3)
+
+        # Power
+        ax3 = self.fig.add_subplot(2, 2, 3)
+        ax3.plot(t, self.simulation_data['Pe'], 'g-', linewidth=2, label='Electrical Power')
+        ax3.axhline(y=self.simulation_data['Pm'], color='orange', linestyle='--',
+                   linewidth=2, label='Mechanical Power')
+        ax3.set_xlabel('Time (s)', fontweight='bold')
+        ax3.set_ylabel('Power (pu)', fontweight='bold')
+        ax3.set_title('Power Balance', fontweight='bold')
+        ax3.grid(True, alpha=0.3)
+        ax3.legend()
+
+        # Phase plane (delta vs omega)
+        ax4 = self.fig.add_subplot(2, 2, 4)
+        ax4.plot(self.simulation_data['delta'], self.simulation_data['omega'], 'm-', linewidth=2)
+        ax4.set_xlabel('Power Angle (degrees)', fontweight='bold')
+        ax4.set_ylabel('Speed Deviation (%)', fontweight='bold')
+        ax4.set_title('Phase Plane Trajectory', fontweight='bold')
+        ax4.grid(True, alpha=0.3)
+        ax4.plot(self.simulation_data['delta'][0], self.simulation_data['omega'][0],
+                'go', markersize=10, label='Start')
+        ax4.plot(self.simulation_data['delta'][-1], self.simulation_data['omega'][-1],
+                'ro', markersize=10, label='End')
+        ax4.legend()
+
+        self.fig.tight_layout()
+        self.canvas.draw()
+
+    def stop_simulation(self):
+        """Stop the simulation"""
+        self.running = False
+
+    def reset_simulation(self):
+        """Reset the simulation"""
+        self.running = False
+        self.simulation_data = None
+        self.fig.clear()
+        self.canvas.draw()
+
+
+class ElectricalEngineeringLab(tk.Tk):
+    """Main Application Window"""
+
+    def __init__(self):
+        super().__init__()
+
+        self.title("Electrical Engineering Advanced Laboratory")
+        self.geometry("1200x800")
+
+        # Configure window resizing
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        # Create notebook (tabs)
+        self.notebook = ttk.Notebook(self)
+        self.notebook.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
+
+        # Create tabs
+        self.tariff_tab = TariffCalculator(self.notebook)
+        self.notebook.add(self.tariff_tab, text="📊 Tariff Calculator")
+
+        self.dc_motor_tab = DCMotorSimulator(self.notebook)
+        self.notebook.add(self.dc_motor_tab, text="⚡ DC Motor Simulator")
+
+        self.sync_machine_tab = SynchronousMachineSimulator(self.notebook)
+        self.notebook.add(self.sync_machine_tab, text="🔄 Synchronous Machine")
+
+        # Status bar
+        self.status_bar = ttk.Label(self, text="Ready | Electrical Engineering Lab v2.0",
+                                   relief=tk.SUNKEN, anchor=tk.W)
+        self.status_bar.grid(row=1, column=0, sticky='ew')
+
+        # Menu bar
+        self.create_menu()
+
+        # Bind resize event
+        self.bind('<Configure>', self.on_resize)
+
+    def create_menu(self):
+        """Create menu bar"""
+        menubar = tk.Menu(self)
+        self.config(menu=menubar)
+
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Exit", command=self.quit)
+
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+
+    def show_about(self):
+        """Show about dialog"""
+        about_text = """
+Electrical Engineering Advanced Laboratory
+Version 2.0
+
+Features:
+• Tariff Calculation & Savings Analysis
+• DC Motor Dynamic Simulation
+• Synchronous Machine Transient Stability
+• Multiple ODE Solvers (RK45, Euler, RK23, DOP853)
+• Real-time Visualization
+• Automatic Window Scaling
+
+Developed for advanced electrical engineering education
+        """
+        messagebox.showinfo("About", about_text)
+
+    def on_resize(self, event):
+        """Handle window resize"""
+        # Update status bar
+        if event.widget == self:
+            self.status_bar.config(text=f"Ready | Window: {self.winfo_width()}x{self.winfo_height()} | EE Lab v2.0")
 
 
 def main():
     """Main entry point"""
-    root = tk.Tk()
-    app = ElectricalEngineeringLab(root)
-    root.mainloop()
+    app = ElectricalEngineeringLab()
+    app.mainloop()
 
 
 if __name__ == "__main__":
